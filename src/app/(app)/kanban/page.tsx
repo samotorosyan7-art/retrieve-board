@@ -120,8 +120,8 @@ export default function KanbanPage() {
 
   return (
     <div className="page active" id="page-kanban">
-      <PageHeader title="Kanban" light="Board" sub={`${f.length} matter${f.length !== 1 ? 's' : ''} shown · drag a card to another column to move it`}>
-        <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}>＋ New Matter</button>
+      <PageHeader title="Kanban" light="Board" sub={`${f.length} task${f.length !== 1 ? 's' : ''} shown · drag a card to another column to move it`}>
+        <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}>＋ New Task</button>
       </PageHeader>
       <MatterFilterRow {...filters} />
 
@@ -178,7 +178,7 @@ export default function KanbanPage() {
                     </div>
                   );
                 })}
-                {cards.length === 0 && <div className="k-empty">No matters</div>}
+                {cards.length === 0 && <div className="k-empty">No tasks</div>}
               </div>
             </div>
           );

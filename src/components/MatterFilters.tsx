@@ -56,7 +56,7 @@ export function MatterFilterRow({
         {clientNames.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
       <select className="sel" {...bind('type')}>
-        <option value="">All matter types</option>
+        <option value="">All task types</option>
         {MATTER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
       </select>
       <select className="sel" {...bind('emp')}>

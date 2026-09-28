@@ -14,23 +14,26 @@ export default function ListPage() {
 
   return (
     <div className="page active" id="page-list">
-      <PageHeader title="All" light="Matters" sub={`${f.length} matters`}>
+      <PageHeader title="All" light="Tasks" sub={`${f.length} task${f.length !== 1 ? 's' : ''}`}>
         <div className="seg-ctrl">
           <button className="seg-btn active">List</button>
           <button className="seg-btn" onClick={() => go('kanban')}>Kanban</button>
         </div>
-        <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}>＋ New Matter</button>
+        <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}>＋ New Task</button>
       </PageHeader>
       <MatterFilterRow {...filters} withStatus />
 
       <div className="data-table-wrap">
         {f.length === 0 ? (
-          <div className="dt-empty">No matters match your filters.</div>
+          <div className="dt-empty">No tasks match your filters.</div>
         ) : (
           <table className="data-table">
+            <colgroup>
+              {[21, 12, 9, 11, 7, 8, 12, 10, 10].map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
+            </colgroup>
             <thead>
               <tr>
-                <th>Matter</th><th>Client</th><th>Type</th><th>Practice Area</th>
+                <th>Task</th><th>Client</th><th>Type</th><th>Practice Area</th>
                 <th>Team</th><th>Priority</th><th>Status</th><th>Progress</th><th>Due Date</th>
               </tr>
             </thead>

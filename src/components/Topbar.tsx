@@ -18,7 +18,7 @@ export function Topbar() {
       </div>
       <div className="topbar-actions">
         {showLogTime && <button className="btn-outline" onClick={() => setModal({ kind: 'logTime' })}>⏱ Log Time</button>}
-        {canCreate && <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}>＋ New Matter</button>}
+        {canCreate && <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}>＋ New Task</button>}
         <button className="icon-btn" onClick={() => toast('📬', 'Notifications sent', 'Task alerts dispatched to team.')}>
           🔔<div className="notif-pip" />
         </button>

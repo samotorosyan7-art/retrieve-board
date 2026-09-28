@@ -88,12 +88,12 @@ function UsersPanel() {
 
 const NOTIFS: [string, string, boolean][] = [
   ['Task assigned to me', 'You receive an email when a task is assigned to your account', true],
-  ['Matter deadline (48h)', 'Alert when a deadline is within 48 hours', true],
-  ['Status change', "Alert when a matter you're on changes status", false],
-  ['File uploaded', 'Alert when a file is added to your matter', false],
-  ['New matter assigned', 'Alert when added to a new matter', true],
+  ['Task deadline (48h)', 'Alert when a deadline is within 48 hours', true],
+  ['Status change', "Alert when a task you're on changes status", false],
+  ['File uploaded', 'Alert when a file is added to your task', false],
+  ['New task assigned', 'Alert when added to a new task', true],
   ['Invoice dispatched', 'Confirmation when billing report is sent', true],
-  ['Weekly digest (Monday)', 'Summary of your active matters and pending tasks', false],
+  ['Weekly digest (Monday)', 'Summary of your active tasks and pending to-dos', false],
 ];
 
 function NotifPanel() {
@@ -121,10 +121,10 @@ const INTEGRATIONS: { icon: string; name: string; desc: React.ReactNode; connect
     icon: '📧', name: 'Gmail / SMTP (EmailJS)', connected: false,
     desc: <>Send email notifications when tasks are assigned. <a href="https://emailjs.com" target="_blank" rel="noreferrer" style={{ color: 'var(--s-billing)' }}>Setup at emailjs.com →</a></>,
   },
-  { icon: '📅', name: 'Google Calendar', desc: 'Sync matter deadlines with your Google Calendar.', connected: false },
+  { icon: '📅', name: 'Google Calendar', desc: 'Sync task deadlines with your Google Calendar.', connected: false },
   { icon: '📊', name: 'Google Sheets', desc: 'Export billing data automatically to Sheets.', connected: false },
   { icon: '💬', name: 'Telegram Bot', desc: 'Receive task notifications in Telegram.', connected: false },
-  { icon: '🔐', name: 'DocuSign', desc: 'Send contracts for e-signature from any matter.', connected: false },
+  { icon: '🔐', name: 'DocuSign', desc: 'Send contracts for e-signature from any task.', connected: false },
 ];
 
 function IntegrationsPanel() {

@@ -14,7 +14,7 @@ export const STATUSES: { id: StatusId; label: string; col: string; bg: string }[
 export const MATTER_TYPES = ["General Corporate","Work Permit","Banking","Contracts","Legal Advice"];
 export const PRIORITIES: { id: PriorityId; label: string; col: string; bg: string }[] = [
   {id:"high",  label:"High",  col:"#F87171",bg:"rgba(248,113,113,0.12)"},
-  {id:"medium",label:"Med",   col:"#FB923C",bg:"rgba(251,146,60,0.12)"},
+  {id:"medium",label:"Medium",   col:"#FB923C",bg:"rgba(251,146,60,0.12)"},
   {id:"low",   label:"Low",   col:"#4ADE80",bg:"rgba(74,222,128,0.12)"},
 ];
 
@@ -22,14 +22,14 @@ export const CLIENT_TYPES = ["Corporate","Technology","Non-Profit","Healthcare",
 
 export const CHAT_ROOMS: { id: string; name: string; icon: string; desc: string; billingOnly?: boolean }[] = [
   {id:'general',  name:'General',          icon:'🏢', desc:'Firm-wide announcements'},
-  {id:'matters',  name:'Matters',          icon:'⚖️', desc:'Case discussion'},
+  {id:'matters',  name:'Cases',            icon:'⚖️', desc:'Case discussion'},
   {id:'billing',  name:'Billing',          icon:'₾',  desc:'Invoices & financials', billingOnly:true},
   {id:'admin',    name:'Admin & Ops',      icon:'⚙',  desc:'Internal office topics'},
   {id:'random',   name:'Random',           icon:'☕', desc:'Off-topic'},
 ];
 
 export const PAGE_LABELS: Record<string, string> = {
-  dashboard:'Dashboard', kanban:'Kanban Board', list:'All Matters', calendar:'Calendar',
+  dashboard:'Dashboard', kanban:'Kanban Board', list:'All Tasks', calendar:'Calendar',
   team:'Team Workload', tasks:'My Tasks', clients:'Clients', chat:'Team Chat',
   billing:'Billing & Invoices', settings:'Settings & Access',
 };

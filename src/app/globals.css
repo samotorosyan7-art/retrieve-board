@@ -2577,3 +2577,26 @@ input[type=email], input[type=password], .input{
 .kanban{align-items:stretch}
 .k-col{display:flex;flex-direction:column}
 .k-col .k-cards{flex:1;min-height:120px;border-radius:var(--r-lg);transition:background var(--fast) var(--ease)}
+
+/* ── ALL TASKS: the table scrolls inside the page and its header stays pinned on top ── */
+#page-list.page.active{display:flex;flex-direction:column;flex:none;height:calc(100vh - var(--topbar-h));overflow:hidden}
+#page-list .data-table-wrap{flex:1;min-height:0;overflow:auto}
+#page-list .data-table{min-width:1080px}
+#page-list .data-table th{top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 0 var(--border-subtle)}
+#page-list .data-table td{overflow:hidden;text-overflow:ellipsis}
+#page-list .dt-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── TEAM CHAT: fits the viewport; only the message list and channel list scroll ── */
+#page-chat.page.active{display:flex;flex-direction:column;flex:none;height:calc(100vh - var(--topbar-h));overflow:hidden}
+#page-chat .page-hdr{flex-shrink:0;margin-bottom:16px}
+#page-chat .chat-layout{flex:1;min-height:0;height:auto}
+#page-chat .chat-sidebar{min-height:0;overflow-y:auto}
+#page-chat .chat-main{min-height:0;overflow:hidden}
+
+/* ── CLIENT DETAIL ── */
+.cdc-top{flex-wrap:wrap}
+.cdc-actions{flex-wrap:wrap}
+.cdc-actions .btn-outline,.cdc-actions .btn-solid{white-space:nowrap}
+.client-matter-row{align-items:center}
+#page-list .data-table td{white-space:nowrap}
+#page-list .data-table td .tag{white-space:nowrap}

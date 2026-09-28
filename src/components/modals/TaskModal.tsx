@@ -20,22 +20,22 @@ export function TaskModal({ id }: { id: string | null }) {
   const [notes, setNotes] = useState(t?.notes || '');
 
   function submit() {
-    if (!title.trim()) { toast('⚠️', 'Required', 'Task title is required.'); return; }
+    if (!title.trim()) { toast('⚠️', 'Required', 'A title is required.'); return; }
     const data = { title: title.trim(), pid, priority, due, time, estHours: parseFloat(est || '0') || 0, notes: notes.trim() };
     const task: Task = t
       ? { ...t, ...data }
       : { id: 't' + Date.now(), who: currentUser?.id || 'fh', done: false, subtasks: [], ...data };
     saveTask(task);
     sendTaskAssignmentEmail(task, emp(task.who), currentUser, projects.find(p => p.id === task.pid)).then(sent => {
-      if (sent) toast('📧', 'Email sent', `${emp(task.who)?.name.split(' ')[0]} notified of new task.`);
+      if (sent) toast('📧', 'Email sent', `${emp(task.who)?.name.split(' ')[0]} notified of a new to-do.`);
     });
-    toast('✅', t ? 'Task updated' : 'Task added', data.title);
+    toast('✅', t ? 'To-do updated' : 'To-do added', data.title);
     closeModal();
   }
 
   return (
     <>
-      <ModalHeader title={t ? 'Edit Task' : 'New Task'} sub={t ? 'Update task details' : 'Add a task to your list'} />
+      <ModalHeader title={t ? 'Edit To-do' : 'New To-do'} sub={t ? 'Update to-do details' : 'Add a to-do to your list'} />
       <div className="modal-body">
         <div>
           <label className="form-label">Title *</label>
@@ -43,9 +43,9 @@ export function TaskModal({ id }: { id: string | null }) {
         </div>
         <div className="form-grid">
           <div>
-            <label className="form-label">Matter</label>
+            <label className="form-label">Task</label>
             <select className="input sel" value={pid} onChange={e => setPid(e.target.value)}>
-              <option value="">— No matter —</option>
+              <option value="">— No task —</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.title.split(' ').slice(0, 4).join(' ')} — {p.client}</option>)}
             </select>
           </div>
@@ -68,7 +68,7 @@ export function TaskModal({ id }: { id: string | null }) {
           <label className="form-label">Notes</label>
           <textarea className="input" rows={2} style={{ resize: 'vertical' }} value={notes} onChange={e => setNotes(e.target.value)} />
         </div>
-        <ModalFooter label={t ? 'Save Changes' : 'Add Task'} onSubmit={submit} />
+        <ModalFooter label={t ? 'Save Changes' : 'Add To-do'} onSubmit={submit} />
       </div>
     </>
   );

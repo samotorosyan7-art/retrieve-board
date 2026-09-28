@@ -3,15 +3,25 @@
 import { useState } from 'react';
 import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
-import { PageHeader, Tag } from '@/components/ui';
-import { firstWords, fmtShort, isTaskOD, pri } from '@/lib/helpers';
+import { AvStack, PageHeader, Tag } from '@/components/ui';
+import { firstWords, fmtShort, isOD, isOpen, isTaskOD, pri, progColor, stat } from '@/lib/helpers';
 import type { Task } from '@/lib/types';
 
 type Filter = 'all' | 'pending' | 'done' | 'overdue';
 
 export default function TasksPage() {
-  const { tasks, currentUser, setModal } = useStore();
+  const { tasks, projects, currentUser, setModal, openPanel, selectedPid } = useStore();
   const [filter, setFilter] = useState<Filter>('all');
+  const [showDone, setShowDone] = useState(false);
+
+  // Tasks (board cards) assigned to me — overdue first, then by due date.
+  const assigned = projects.filter(p => !!currentUser && p.assignees.includes(currentUser.id));
+  const assignedOpen = assigned.filter(isOpen);
+  const assignedDone = assigned.filter(p => !isOpen(p));
+  const assignedShown = [...(showDone ? assignedDone : assignedOpen)].sort((a, b) => {
+    if (isOD(a) !== isOD(b)) return isOD(a) ? -1 : 1;
+    return new Date(a.due || '9999-12-31').getTime() - new Date(b.due || '9999-12-31').getTime();
+  });
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const all = tasks.filter(t => t.who === currentUser?.id);
@@ -29,13 +39,48 @@ export default function TasksPage() {
   const tabs: [Filter, string, number][] = [
     ['all', 'All', all.length], ['pending', 'Pending', pending.length], ['overdue', 'Overdue', overdue.length], ['done', 'Done', done.length],
   ];
-  const emptyTitle = { pending: 'All caught up!', overdue: 'No overdue tasks!', done: 'No completed tasks yet', all: 'No tasks assigned' }[filter];
+  const emptyTitle = { pending: 'All caught up!', overdue: 'No overdue to-dos!', done: 'No completed to-dos yet', all: 'No to-dos yet' }[filter];
 
   return (
     <div className="page active" id="page-tasks">
-      <PageHeader title="My" light="Tasks" sub={`${pending.length} pending · ${done.length} done · ${overdue.length} overdue`}>
-        <button className="btn-solid" onClick={() => setModal({ kind: 'task', id: null })}>＋ Add Task</button>
+      <PageHeader title="My" light="Tasks" sub={`${assignedOpen.length} open task${assignedOpen.length !== 1 ? 's' : ''} assigned to you · ${pending.length} to-do${pending.length !== 1 ? 's' : ''} pending`}>
+        <button className="btn-solid" onClick={() => setModal({ kind: 'task', id: null })}>＋ Add To-do</button>
       </PageHeader>
+
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Assigned to me</div>
+          <div className="seg-ctrl">
+            <button className={`seg-btn${!showDone ? ' active' : ''}`} onClick={() => setShowDone(false)}>Open ({assignedOpen.length})</button>
+            <button className={`seg-btn${showDone ? ' active' : ''}`} onClick={() => setShowDone(true)}>Completed &amp; archived ({assignedDone.length})</button>
+          </div>
+        </div>
+        {assignedShown.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', padding: '8px 0' }}>
+            {showDone ? 'Nothing completed yet.' : 'No open tasks assigned to you 🎉'}
+          </div>
+        ) : assignedShown.map(p => {
+          const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
+          return (
+            <div key={p.id} className="urgent-row" onClick={() => openPanel(p.id)} style={p.id === selectedPid ? { background: 'var(--bg-active)' } : undefined}>
+              <div className="urgent-dot" style={{ background: od ? '#F87171' : st.col }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="urgent-title">{p.title}</div>
+                <div className="urgent-client">{[p.client, p.matterType, firstWords(p.area, 3)].filter(Boolean).join(' · ')}</div>
+              </div>
+              <div style={{ width: 70 }} title={`${p.progress}%`}>
+                <div className="util-track"><div className="util-fill" style={{ width: `${p.progress}%`, background: progColor(p.progress) }} /></div>
+              </div>
+              <AvStack ids={p.assignees.slice(0, 3)} />
+              <Tag {...pr} />
+              <Tag {...st} />
+              <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)', width: 64, textAlign: 'right' }}>{od ? '⚠ ' : ''}{fmtShort(p.due)}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>My to-dos</div>
 
       <div className="tasks-filter-row">
         {tabs.map(([id, label, count]) => (
@@ -51,7 +96,7 @@ export default function TasksPage() {
             <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{emptyTitle}</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              {filter === 'pending' ? 'Nothing pending. Add a new task to get started.' : 'Check back later.'}
+              {filter === 'pending' || filter === 'all' ? 'Use “＋ Add To-do” for personal reminders and checklists.' : 'Check back later.'}
             </div>
           </div>
         )}
@@ -86,7 +131,7 @@ function TaskCard({ t, expanded, onToggle }: { t: Task; expanded: boolean; onTog
           <div className={`tc-title${t.done ? ' done' : ''}`}>{t.title}</div>
           <div className="tc-meta">
             {p && (
-              <span className="tc-matter" onClick={e => { e.stopPropagation(); openMatter(p.id); }} title="Open matter">
+              <span className="tc-matter" onClick={e => { e.stopPropagation(); openMatter(p.id); }} title="Open task">
                 {p.client} · {firstWords(p.title, 3)}
               </span>
             )}
@@ -140,7 +185,7 @@ function TaskCard({ t, expanded, onToggle }: { t: Task; expanded: boolean; onTog
             {!t.done
               ? <button className="tc-btn success" onClick={() => toggleTask(t.id)}>✓ Mark Complete</button>
               : <button className="tc-btn default" onClick={() => toggleTask(t.id)}>↩ Reopen</button>}
-            {p && <button className="tc-btn default" onClick={() => openMatter(p.id)}>↗ Open Matter</button>}
+            {p && <button className="tc-btn default" onClick={() => openMatter(p.id)}>↗ Open Task</button>}
             <button className="tc-btn default" onClick={() => setModal({ kind: 'task', id: t.id })}>✏ Edit</button>
             <button className="tc-btn danger" onClick={() => deleteTask(t.id)}>🗑</button>
           </div>

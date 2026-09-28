@@ -12,7 +12,7 @@ export default function TeamPage() {
 
   return (
     <div className="page active" id="page-team">
-      <PageHeader title="Team" light="Workload" sub="Live view of every attorney's current matters and capacity">
+      <PageHeader title="Team" light="Workload" sub="Live view of every attorney's current tasks and capacity">
         <select className="sel" value={fe} onChange={e => setFe(e.target.value)}>
           <option value="">All members</option>
           {team.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
@@ -39,18 +39,18 @@ export default function TeamPage() {
                   <Kpi val={active} label="Active" color="var(--s-active)" />
                   <Kpi val={done} label="Done" color="var(--s-done)" />
                   <Kpi val={hp} label="High" color="var(--p-high)" />
-                  <Kpi val={myTasks} label="Tasks" color="var(--s-review)" />
+                  <Kpi val={myTasks} label="To-dos" color="var(--s-review)" />
                 </div>
               </div>
               <div className="ec-body">
-                <div className="ec-section-lbl">Active matters</div>
+                <div className="ec-section-lbl">Active tasks</div>
                 {inProgress.slice(0, 3).map(p => (
                   <div key={p.id} className="ec-matter" onClick={() => openPanel(p.id)}>
                     <div style={{ flex: 1, minWidth: 0 }}><div className="ec-m-title">{p.title}</div><div className="ec-m-client">{p.client}</div></div>
                     <div style={{ display: 'flex', gap: 4 }}><Tag {...pri(p.priority)} /><Tag {...stat(p.status)} /></div>
                   </div>
                 ))}
-                {inProgress.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No active matters</div>}
+                {inProgress.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No active tasks</div>}
                 {inProgress.length > 3 && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>+{inProgress.length - 3} more</div>}
                 <div className="ec-util" style={{ marginTop: 12 }}>
                   <div className="ec-util-lbl">Utilisation ({util}%)</div>

@@ -6,16 +6,16 @@ import { LOGO_SRC } from '@/lib/constants';
 import { useStore } from '@/components/store';
 
 const FEATURES: [string, string][] = [
-  ['⊞', 'Kanban + list view for all active matters'],
+  ['⊞', 'Kanban + list view for all active tasks'],
   ['👥', 'Live team workload & utilisation tracking'],
-  ['⏱', 'Time logging with one-click entry on any matter'],
+  ['⏱', 'Time logging with one-click entry on any task'],
   ['₾', 'Monthly billing reports with RA VAT — send direct to client'],
-  ['📅', 'Deadline calendar view across all matters'],
+  ['📅', 'Deadline calendar view across all tasks'],
   ['🔒', 'Role-based access — billing admin-only'],
 ];
 
 export default function LandingPage() {
-  const { authStatus, login, logout, sendPasswordEmail, isDark, toggleTheme } = useStore();
+  const { authStatus, currentUser, login, logout, sendPasswordEmail, isDark, toggleTheme } = useStore();
   const router = useRouter();
 
   const [email, setEmail] = useState('');
@@ -27,8 +27,9 @@ export default function LandingPage() {
   const passRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (authStatus === 'signedIn') router.replace('/dashboard');
-  }, [authStatus, router]);
+    // Admins start on the dashboard; everyone else on their own tasks.
+    if (authStatus === 'signedIn') router.replace(currentUser?.isAdmin ? '/dashboard' : '/tasks');
+  }, [authStatus, currentUser, router]);
 
   async function attemptLogin() {
     if (!email.trim() || !pass) { setError('Please enter your email and password.'); return; }

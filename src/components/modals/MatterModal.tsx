@@ -27,15 +27,15 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
     if (!title.trim() || !client.trim()) { toast('⚠️', 'Missing info', 'Title and client are required.'); return; }
     const p = createProject({ title: title.trim(), client: client.trim(), area, matterType, status, priority, assignees, due, notes, isPrivate });
     closeModal();
-    toast('✅', 'Matter created', `"${p.title}" added to the board.`);
+    toast('✅', 'Task created', `"${p.title}" added to the board.`);
   }
 
   return (
     <>
-      <ModalHeader title="New Matter" sub="Add a new legal matter to the board" />
+      <ModalHeader title="New Task" sub="Add a new task to the board" />
       <div className="modal-body">
         <div>
-          <label className="form-label">Matter Title *</label>
+          <label className="form-label">Task Title *</label>
           <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Shell Armenia Q3 Tax Compliance" autoFocus />
         </div>
         <div>
@@ -45,7 +45,7 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
         </div>
         <div className="form-grid">
           <div>
-            <label className="form-label">Matter Type</label>
+            <label className="form-label">Task Type</label>
             <select className="input sel" value={matterType} onChange={e => setMatterType(e.target.value)}>
               <option value="">— Not set —</option>
               {MATTER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -90,13 +90,13 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
           <label className="nm-privacy-label" onClick={() => setIsPrivate(v => !v)}>
             <div className="nm-priv-icon">{isPrivate ? '🔒' : '🌐'}</div>
             <div>
-              <div className="nm-priv-title">{isPrivate ? 'Private matter' : 'Public matter'}</div>
+              <div className="nm-priv-title">{isPrivate ? 'Private task' : 'Public task'}</div>
               <div className="nm-priv-sub">{isPrivate ? 'Only visible to you' : 'Visible to your whole team'}</div>
             </div>
             <div className="nm-priv-toggle" />
           </label>
         </div>
-        <ModalFooter label="Create Matter" onSubmit={submit} />
+        <ModalFooter label="Create Task" onSubmit={submit} />
       </div>
     </>
   );

@@ -343,13 +343,13 @@ function useStoreValue() {
     const p = state.current.projects.find(x => x.id === id);
     if (!p) return;
     if (p.createdBy && p.createdBy !== state.current.currentUser?.id) {
-      toast('🔒', 'Cannot change', 'Only the person who created this matter can change its visibility.');
+      toast('🔒', 'Cannot change', 'Only the person who created this task can change its visibility.');
       return;
     }
     const priv = !p.isPrivate;
     patchProject(id, { isPrivate: priv });
-    toast(priv ? '🔒' : '🌐', priv ? 'Matter is now private' : 'Matter is now public',
-      priv ? 'Only you can see this matter.' : 'Visible to the whole team.');
+    toast(priv ? '🔒' : '🌐', priv ? 'Task is now private' : 'Task is now public',
+      priv ? 'Only you can see this task.' : 'Visible to the whole team.');
   };
   const addTimeLog = (pid: string, log: TimeLog) => {
     const p = state.current.projects.find(x => x.id === pid);
@@ -358,21 +358,21 @@ function useStoreValue() {
   };
   const archiveProject = (id: string) => {
     setStatus(id, 'archive');
-    toast('🗄', 'Matter archived', 'Moved to Archive.');
+    toast('🗄', 'Task archived', 'Moved to Archive.');
   };
   const deleteProject = (id: string) => {
     const p = state.current.projects.find(x => x.id === id);
     if (!p) return;
     setConfirmState({
-      title: 'Delete matter?',
-      msg: `"${p.title}" and its time log will be permanently removed. Tasks linked to it are kept. This cannot be undone.`,
-      confirmLabel: 'Delete matter',
+      title: 'Delete task?',
+      msg: `"${p.title}" and its time log will be permanently removed. To-dos linked to it are kept. This cannot be undone.`,
+      confirmLabel: 'Delete task',
       onConfirm: async () => {
         setProjects(ps => ps.filter(x => x.id !== id));
         setSelectedPid(cur => (cur === id ? null : cur));
         if (await persist({ type: 'project_delete', id })) {
-          addActivity(me(), `deleted matter <b>${p.title}</b>`);
-          toast('🗑️', 'Matter deleted', p.title);
+          addActivity(me(), `deleted task <b>${p.title}</b>`);
+          toast('🗑️', 'Task deleted', p.title);
         } else reload();
       },
     });
@@ -382,7 +382,7 @@ function useStoreValue() {
       ...data, id: 'p' + Date.now(), progress: 0, created: today(), timeLogs: [], files: [], createdBy: me(),
     };
     saveProject(p);
-    addActivity(me(), `created matter <b>${p.title}</b>`);
+    addActivity(me(), `created task <b>${p.title}</b>`);
     return p;
   };
 
@@ -395,7 +395,7 @@ function useStoreValue() {
     const t = state.current.tasks.find(x => x.id === id);
     if (!t) return;
     saveTask({ ...t, done: !t.done });
-    toast('✅', 'Task updated', !t.done ? 'Marked complete.' : 'Moved back to pending.');
+    toast('✅', 'To-do updated', !t.done ? 'Marked complete.' : 'Moved back to pending.');
   };
   const toggleSubtask = (tid: string, sid: string) => {
     const t = state.current.tasks.find(x => x.id === tid);
@@ -411,12 +411,12 @@ function useStoreValue() {
     const t = state.current.tasks.find(x => x.id === id);
     if (!t) return;
     setConfirmState({
-      title: 'Delete task?',
+      title: 'Delete to-do?',
       msg: `"${t.title}" will be permanently removed.`,
-      confirmLabel: 'Delete task',
+      confirmLabel: 'Delete to-do',
       onConfirm: async () => {
         setTasks(ts => ts.filter(x => x.id !== id));
-        if (await persist({ type: 'task_delete', id })) toast('🗑', 'Task deleted', t.title);
+        if (await persist({ type: 'task_delete', id })) toast('🗑', 'To-do deleted', t.title);
         else reload();
       },
     });
@@ -434,7 +434,7 @@ function useStoreValue() {
     setConfirmState({
       title: 'Delete client?',
       msg: `"${c.name}" will be permanently removed from your client list.` +
-        (n ? ` Its ${n} matter${n === 1 ? '' : 's'} will stay on the board under the same client name.` : '') +
+        (n ? ` Its ${n} task${n === 1 ? '' : 's'} will stay on the board under the same client name.` : '') +
         ' This cannot be undone.',
       confirmLabel: 'Delete client',
       onConfirm: async () => {

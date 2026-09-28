@@ -10,7 +10,7 @@ export default function DashboardPage() {
   const { go } = useNav();
 
   const kpis = [
-    { val: projects.length, label: 'Total Matters', sub: 'across all areas', color: '#7C6FF7' },
+    { val: projects.length, label: 'Total Tasks', sub: 'across all areas', color: '#7C6FF7' },
     { val: projects.filter(p => p.status === 'inprogress').length, label: 'In Progress', sub: 'in progress now', color: '#E8A838' },
     { val: projects.filter(p => p.priority === 'high' && isOpen(p)).length, label: 'High Priority', sub: 'need attention', color: '#F87171' },
     { val: projects.filter(isOD).length, label: 'Overdue', sub: 'past due date', color: '#EF4444' },
@@ -39,7 +39,7 @@ export default function DashboardPage() {
             Here&apos;s what needs your attention today — {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
           </div>
         </div>
-        <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}>＋ New Matter</button>
+        <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}>＋ New Task</button>
       </div>
 
       <div className="kpi-grid">
@@ -74,7 +74,7 @@ export default function DashboardPage() {
                 </div>
               );
             }) : (
-              <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', padding: '8px 0' }}>All clear — no urgent matters 🎉</div>
+              <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', padding: '8px 0' }}>All clear — no urgent tasks 🎉</div>
             )}
           </div>
 
@@ -137,7 +137,7 @@ export default function DashboardPage() {
 
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div style={cardTitle}>My Tasks</div>
+              <div style={cardTitle}>My To-dos</div>
               <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>{pendTasks} pending</span>
             </div>
             {myTasks.length ? myTasks.map(t => {
@@ -154,8 +154,8 @@ export default function DashboardPage() {
                   </div>
                 </div>
               );
-            }) : <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No pending tasks 🎉</div>}
-            <button className="btn-ghost" style={{ width: '100%', marginTop: 8, fontSize: 12 }} onClick={() => go('tasks')}>View all tasks →</button>
+            }) : <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No pending to-dos 🎉</div>}
+            <button className="btn-ghost" style={{ width: '100%', marginTop: 8, fontSize: 12 }} onClick={() => go('tasks')}>View my tasks →</button>
           </div>
         </div>
       </div>

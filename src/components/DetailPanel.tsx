@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { MATTER_TYPES, STATUSES } from '@/lib/constants';
+import { MATTER_TYPES, PRIORITIES, STATUSES } from '@/lib/constants';
 import { fmtDate, isOD, isTaskOD, pri, progColor, stat, today } from '@/lib/helpers';
 import type { Project } from '@/lib/types';
 import { useStore } from './store';
@@ -25,6 +25,9 @@ function PanelContent({ p }: { p: Project }) {
   const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
   const pTasks = tasks.filter(t => t.pid === p.id && (!t.isPrivate || t.who === currentUser?.id));
   const isOwner = !p.createdBy || p.createdBy === currentUser?.id;
+  // Admins log time for anyone; everyone else only for themselves, and only on tasks they're assigned to.
+  const isAdmin = !!currentUser?.isAdmin;
+  const canLogTime = isAdmin || (!!currentUser && p.assignees.includes(currentUser.id));
 
   const [notes, setNotes] = useState(p.notes || '');
   const [formOpen, setFormOpen] = useState(false);
@@ -35,9 +38,11 @@ function PanelContent({ p }: { p: Project }) {
   function addTimeEntry() {
     const hours = parseFloat(tfHours || '0');
     const desc = tfDesc.trim();
-    if (!desc || !hours || !tfWho) { toast('⚠️', 'Missing info', 'Please fill in all fields.'); return; }
-    addTimeLog(p.id, { who: tfWho, hours, desc, date: today(), month: new Date().getMonth() + 1 });
-    addActivity(currentUser?.id || tfWho, `logged <b>${hours}h</b> on <b>${p.title}</b>`);
+    const who = isAdmin ? tfWho : currentUser?.id || '';
+    if (!canLogTime) return;
+    if (!desc || !hours || !who) { toast('⚠️', 'Missing info', 'Please fill in all fields.'); return; }
+    addTimeLog(p.id, { who, hours, desc, date: today(), month: new Date().getMonth() + 1 });
+    addActivity(currentUser?.id || who, `logged <b>${hours}h</b> on <b>${p.title}</b>`);
     toast('⏱', 'Time logged', `${hours}h added to ${p.title}`);
     setTfDesc(''); setTfHours(''); setFormOpen(false);
   }
@@ -98,12 +103,29 @@ function PanelContent({ p }: { p: Project }) {
           </div>
         </div>
 
+        {/* PRIORITY */}
+        <div className="dp-section">
+          <div className="dp-section-label">Priority</div>
+          <div className="status-btns">
+            {PRIORITIES.map(x => (
+              <button
+                key={x.id}
+                className="stat-btn"
+                style={{ background: p.priority === x.id ? x.col : x.bg, color: p.priority === x.id ? '#fff' : x.col, borderColor: `${x.col}44` }}
+                onClick={() => { if (p.priority !== x.id) { patchProject(p.id, { priority: x.id }); toast('🚩', 'Priority updated', x.label); } }}
+              >
+                {x.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* MATTER TYPE */}
         <div className="dp-section">
-          <div className="dp-section-label">Matter Type</div>
+          <div className="dp-section-label">Task Type</div>
           <select
             className="input sel" value={p.matterType || ''}
-            onChange={e => { patchProject(p.id, { matterType: e.target.value }); toast('🏷', 'Matter type updated', e.target.value || 'None'); }}
+            onChange={e => { patchProject(p.id, { matterType: e.target.value }); toast('🏷', 'Task type updated', e.target.value || 'None'); }}
           >
             <option value="">— Not set —</option>
             {MATTER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -146,7 +168,7 @@ function PanelContent({ p }: { p: Project }) {
             <div className="dp-section-label" style={{ marginBottom: 0 }}>Notes</div>
             <button
               className="btn-ghost" style={{ fontSize: 10.5, padding: '3px 9px' }}
-              onClick={() => { patchProject(p.id, { notes: notes.trim() }); toast('💾', 'Notes saved', 'Matter notes updated.'); }}
+              onClick={() => { patchProject(p.id, { notes: notes.trim() }); toast('💾', 'Notes saved', 'Task notes updated.'); }}
             >
               Save
             </button>
@@ -158,7 +180,7 @@ function PanelContent({ p }: { p: Project }) {
         {pTasks.length > 0 && (
           <div className="dp-section">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
-              <div className="dp-section-label" style={{ marginBottom: 0 }}>Tasks ({pTasks.length})</div>
+              <div className="dp-section-label" style={{ marginBottom: 0 }}>To-dos ({pTasks.length})</div>
             </div>
             {pTasks.map(t => {
               const e = emp(t.who), tpr = pri(t.priority || 'medium');
@@ -180,7 +202,7 @@ function PanelContent({ p }: { p: Project }) {
                     </div>
                     <Tag {...tpr} />
                     <button
-                      title="Delete task" onClick={() => deleteTask(t.id)}
+                      title="Delete to-do" onClick={() => deleteTask(t.id)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--p-high)', opacity: 0.75, padding: '0 2px' }}
                     >
                       🗑
@@ -211,7 +233,9 @@ function PanelContent({ p }: { p: Project }) {
         <div className="dp-section">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
             <div className="dp-section-label" style={{ marginBottom: 0 }}>Time Log</div>
-            <button className="btn-ghost" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => setFormOpen(o => !o)}>+ Log Time</button>
+            {canLogTime && (
+              <button className="btn-ghost" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => setFormOpen(o => !o)}>+ Log Time</button>
+            )}
           </div>
           <div className={`time-entry-form${formOpen ? ' open' : ''}`}>
             <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>Log Time Entry</div>
@@ -224,12 +248,14 @@ function PanelContent({ p }: { p: Project }) {
                 <label className="form-label">Hours</label>
                 <input className="input" type="number" step="0.5" min="0.5" placeholder="2.5" value={tfHours} onChange={e => setTfHours(e.target.value)} />
               </div>
-              <div>
-                <label className="form-label">Attorney</label>
-                <select className="input sel" value={tfWho} onChange={e => setTfWho(e.target.value)}>
-                  {team.map(e => <option key={e.id} value={e.id}>{e.name.split(' ')[0]}</option>)}
-                </select>
-              </div>
+              {isAdmin && (
+                <div>
+                  <label className="form-label">Attorney</label>
+                  <select className="input sel" value={tfWho} onChange={e => setTfWho(e.target.value)}>
+                    {team.map(e => <option key={e.id} value={e.id}>{e.name.split(' ')[0]}</option>)}
+                  </select>
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
                 <button className="btn-solid" style={{ whiteSpace: 'nowrap' }} onClick={addTimeEntry}>Add</button>
                 <button className="btn-cancel" onClick={() => setFormOpen(false)}>✕</button>
@@ -256,7 +282,7 @@ function PanelContent({ p }: { p: Project }) {
         {/* FILES */}
         <div className="dp-section">
           <div className="dp-section-label">Files &amp; Documents</div>
-          <div className="file-drop-zone" onClick={() => toast('📂', 'File attached', 'In production: uploads to Google Drive folder for this matter.')}>
+          <div className="file-drop-zone" onClick={() => toast('📂', 'File attached', 'In production: uploads to Google Drive folder for this task.')}>
             <div className="fdz-icon">📎</div>
             <div className="fdz-txt">Drop files here or click to attach</div>
             <div className="fdz-sub">Auto-syncs to Google Drive · {p.client} folder</div>
@@ -274,12 +300,12 @@ function PanelContent({ p }: { p: Project }) {
         {/* ACTIONS */}
         <div className="dp-section" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <button className="dp-action-btn primary" onClick={() => toast('✉️', 'Team notified', 'Task emails sent to all assignees.')}>✉️ Notify Team</button>
-          <button className="dp-action-btn default" onClick={() => toast('📋', 'Copied', 'Matter link copied to clipboard.')}>🔗 Copy Link</button>
+          <button className="dp-action-btn default" onClick={() => toast('📋', 'Copied', 'Task link copied to clipboard.')}>🔗 Copy Link</button>
           {p.status !== 'archive' && (
-            <button className="dp-action-btn default" onClick={() => archiveProject(p.id)}>🗄 Archive Matter</button>
+            <button className="dp-action-btn default" onClick={() => archiveProject(p.id)}>🗄 Archive Task</button>
           )}
           {currentUser?.isAdmin && (
-            <button className="dp-action-btn danger" onClick={() => deleteProject(p.id)}>🗑 Delete Matter</button>
+            <button className="dp-action-btn danger" onClick={() => deleteProject(p.id)}>🗑 Delete Task</button>
           )}
         </div>
       </div>

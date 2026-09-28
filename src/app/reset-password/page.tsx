@@ -10,7 +10,7 @@ const MIN_LENGTH = 10;
 
 /** Landing page for invitation and password-reset emails; also used to change your password while signed in. */
 export default function ResetPasswordPage() {
-  const { authStatus } = useStore();
+  const { authStatus, currentUser } = useStore();
   const router = useRouter();
   const [linkError, setLinkError] = useState('');
   const [pass, setPass] = useState('');
@@ -36,7 +36,7 @@ export default function ResetPasswordPage() {
     setBusy(false);
     if (error) { setError(error.message); return; }
     setDone(true);
-    setTimeout(() => router.replace('/dashboard'), 1200);
+    setTimeout(() => router.replace(currentUser?.isAdmin ? '/dashboard' : '/tasks'), 1200);
   }
 
   return (
@@ -60,7 +60,7 @@ export default function ResetPasswordPage() {
             </>
           ) : done ? (
             <div className="login-error" style={{ background: 'rgba(52,211,153,0.1)', borderColor: 'rgba(52,211,153,0.3)', color: '#34D399' }}>
-              Password saved. Taking you to the dashboard…
+              Password saved. Taking you in…
             </div>
           ) : (
             <>

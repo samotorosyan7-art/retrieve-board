@@ -39,15 +39,15 @@ export default function CalendarPage() {
 
   return (
     <div className="page active" id="page-calendar">
-      <PageHeader title="Matter" light="Calendar" sub={`Deadlines & tasks for ${monthName}`}>
+      <PageHeader title="Task" light="Calendar" sub={`Deadlines & to-dos for ${monthName}`}>
         <button className="btn-ghost" onClick={() => shift(-1)} style={{ padding: '6px 12px' }}>← Prev</button>
         <button className="btn-ghost" onClick={() => setMonth({ m: now.getMonth(), y: now.getFullYear() })} style={{ padding: '6px 12px' }}>Today</button>
         <button className="btn-ghost" onClick={() => shift(1)} style={{ padding: '6px 12px' }}>Next →</button>
       </PageHeader>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
-        <Legend color="rgba(124,111,247,0.3)" label="Matter deadline" />
-        <Legend color="rgba(248,113,113,0.3)" label="Task (timed)" />
+        <Legend color="rgba(124,111,247,0.3)" label="Task deadline" />
+        <Legend color="rgba(248,113,113,0.3)" label="To-do (timed)" />
       </div>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -102,7 +102,7 @@ export default function CalendarPage() {
         </div>
 
         <div className="card" style={{ marginTop: 14 }}>
-          <div style={{ ...cardTitle, marginBottom: 12 }}>Timed Tasks — {monthName}</div>
+          <div style={{ ...cardTitle, marginBottom: 12 }}>Timed To-dos — {monthName}</div>
           {timedTasks.length ? timedTasks.map(t => {
             const p = projects.find(x => x.id === t.pid), pr = pri(t.priority || 'medium');
             const od = new Date(t.due) < new Date();
@@ -118,7 +118,7 @@ export default function CalendarPage() {
                 <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)' }}>{fmtDate(t.due)}</div>
               </div>
             );
-          }) : <div style={muted}>No timed tasks this month.</div>}
+          }) : <div style={muted}>No timed to-dos this month.</div>}
         </div>
       </div>
     </div>

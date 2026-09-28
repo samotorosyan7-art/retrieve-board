@@ -3,13 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LOGO_SRC } from '@/lib/constants';
+import { isOpen } from '@/lib/helpers';
 import { useNav } from './nav';
 import { useStore } from './store';
 
 type NavItem = { id: string; icon: string; label: string; badge?: number; badgeStyle?: React.CSSProperties };
 
 export function Sidebar() {
-  const { currentUser, clients, tasks, chatUnread, search, setSearch, isDark, toggleTheme, logout } = useStore();
+  const { currentUser, clients, tasks, projects, chatUnread, search, setSearch, isDark, toggleTheme, logout } = useStore();
   const { page, go } = useNav();
   const router = useRouter();
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -17,7 +18,9 @@ export function Sidebar() {
 
   const isAdmin = !!currentUser.isAdmin;
   const isBilling = !!(currentUser.isBilling || currentUser.isAdmin);
-  const pendingTasks = tasks.filter(t => t.who === currentUser.id && !t.done).length;
+  const pendingTasks = tasks.filter(t => t.who === currentUser.id && !t.done).length
+    + projects.filter(p => isOpen(p) && p.assignees.includes(currentUser.id)).length;
+  const myTasks = { id: 'tasks', icon: '✓', label: 'My Tasks', badge: pendingTasks };
 
   const link = (n: NavItem) => (
     <div key={n.id} className={`nav-link${page === n.id ? ' active' : ''}`} onClick={() => go(n.id)} data-page={n.id}>
@@ -36,19 +39,20 @@ export function Sidebar() {
           <div><div className="sb-firm">Retrieve</div><div className="sb-city">Legal &amp; Tax · Yerevan</div></div>
         </div>
         <div className="sb-search">
-          <input placeholder="Search matters…" value={search} onChange={e => setSearch(e.target.value)} />
+          <input placeholder="Search tasks…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
       </div>
       <div className="sb-nav">
         <div className="sb-section">Overview</div>
+        {!isAdmin && link(myTasks)}
         {link({ id: 'dashboard', icon: '◉', label: 'Dashboard' })}
-        <div className="sb-section">Matters</div>
+        <div className="sb-section">Tasks</div>
         {link({ id: 'kanban', icon: '⊞', label: 'Kanban Board' })}
-        {link({ id: 'list', icon: '≡', label: 'All Matters' })}
+        {link({ id: 'list', icon: '≡', label: 'All Tasks' })}
         {link({ id: 'calendar', icon: '📅', label: 'Calendar' })}
         {link({ id: 'clients', icon: '🏢', label: 'Clients', badge: clients.length, badgeStyle: { background: 'var(--s-done)' } })}
         {link({ id: 'team', icon: '👥', label: 'Team Workload' })}
-        {link({ id: 'tasks', icon: '✓', label: 'My Tasks', badge: pendingTasks })}
+        {isAdmin && link(myTasks)}
         {link({ id: 'chat', icon: '💬', label: 'Team Chat', badge: chatUnread })}
         {isBilling && (
           <>
