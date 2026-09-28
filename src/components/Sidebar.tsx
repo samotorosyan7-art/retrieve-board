@@ -79,7 +79,8 @@ export function Sidebar() {
         <div><div className="sb-user-name">{currentUser.name}</div><div className="sb-user-role">{currentUser.role}</div></div>
         <div className="sb-actions">
           <button className="sb-icon-btn" onClick={toggleTheme} title="Toggle theme">{isDark ? '🌙' : '☀️'}</button>
-          <button className="sb-icon-btn" onClick={() => { logout(); router.replace('/'); }} title="Sign out">⏻</button>
+          <button className="sb-icon-btn" onClick={() => router.push('/reset-password')} title="Change password">🔑</button>
+          <button className="sb-icon-btn" onClick={async () => { await logout(); router.replace('/'); }} title="Sign out">⏻</button>
         </div>
       </div>
     </nav>

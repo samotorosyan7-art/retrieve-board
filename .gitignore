@@ -5,3 +5,6 @@ out
 next-env.d.ts
 *.tsbuildinfo
 .DS_Store
+
+# Original single-file version (contains old credential hashes) — kept locally, not in git
+retrieve am platform.html

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '@/components/store';
 import { PageHeader, Photo } from '@/components/ui';
 import { CHAT_ROOMS } from '@/lib/constants';
+import { dmRoom } from '@/lib/helpers';
 
 export default function ChatPage() {
   const { team, currentUser, chatMessages, loadRoom, sendMessage, setChatVisible } = useStore();
@@ -36,7 +37,8 @@ export default function ChatPage() {
   let roomName = channel ? `# ${channel.name}` : '';
   let roomDesc = channel?.desc || '';
   if (room.startsWith('dm_')) {
-    roomName = team.find(e => e.id === room.slice(3))?.name || 'Direct Message';
+    const other = room.slice(3).split('__').find(id => id !== currentUser?.id);
+    roomName = team.find(e => e.id === other)?.name || 'Direct Message';
     roomDesc = 'Private direct message';
   }
 
@@ -66,7 +68,7 @@ export default function ChatPage() {
           <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border-subtle)' }}>
             <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Direct Messages</div>
             {team.filter(e => e.id !== currentUser?.id).map(e => (
-              <div key={e.id} className={`chat-room-row${room === 'dm_' + e.id ? ' active' : ''}`} onClick={() => setRoom('dm_' + e.id)}>
+              <div key={e.id} className={`chat-room-row${room === dmRoom(currentUser!.id, e.id) ? ' active' : ''}`} onClick={() => setRoom(dmRoom(currentUser!.id, e.id))}>
                 <div className="chat-msg-av" style={{ width: 22, height: 22, fontSize: 9, background: e.color }}>{e.init}</div>
                 <div className="chat-room-name">{e.name.split(' ')[0]}</div>
               </div>

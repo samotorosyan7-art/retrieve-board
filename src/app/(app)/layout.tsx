@@ -10,14 +10,14 @@ import { ModalHost } from '@/components/modals/ModalHost';
 import { ConfirmDialog } from '@/components/modals/ConfirmDialog';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { hydrated, currentUser } = useStore();
+  const { authStatus } = useStore();
   const router = useRouter();
 
   useEffect(() => {
-    if (hydrated && !currentUser) router.replace('/');
-  }, [hydrated, currentUser, router]);
+    if (authStatus === 'signedOut' || authStatus === 'noAccess') router.replace('/');
+  }, [authStatus, router]);
 
-  if (!hydrated || !currentUser) return null;
+  if (authStatus !== 'signedIn') return null;
 
   return (
     <>

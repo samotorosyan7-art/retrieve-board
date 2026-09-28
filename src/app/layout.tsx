@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 };
 
 // Apply the cached theme before first paint to avoid a flash.
-const themeScript = `try{var s=JSON.parse(localStorage.getItem('retrieve_pm_v1')||'null');if(s&&s.isDark===false)document.documentElement.setAttribute('data-theme','light')}catch(e){}`;
+const themeScript = `try{if(localStorage.getItem('retrieve_theme')==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -1,5 +1,5 @@
 import { getSupabase } from './supabase';
-import type { Activity, ChatMessage, Client, Project, Task } from './types';
+import type { Activity, ChatMessage, Client, Member, Project, Task } from './types';
 
 /* ── Row converters (DB snake_case ↔ app camelCase) ── */
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -75,6 +75,19 @@ export function rowToActivity(r: Row): Activity {
   const time = m < 1 ? 'Just now' : m < 60 ? m + 'm ago' : m < 1440 ? Math.floor(m / 60) + 'h ago' : Math.floor(m / 1440) + 'd ago';
   return { who: r.who, text: r.text, time };
 }
+export function rowToMember(r: Row): Member {
+  return {
+    id: r.id, name: r.name, init: r.init || '', role: r.role || '', color: r.color || '#7C6FF7',
+    rate: Number(r.rate) || 0, img: r.img || '', email: (r.email || '').toLowerCase(),
+    isAdmin: !!r.is_admin, isBilling: !!r.is_billing, isAdmin_assistant: !!r.is_assistant,
+  };
+}
+export function memberToRow(m: Member) {
+  return {
+    id: m.id, name: m.name, init: m.init, role: m.role, color: m.color, rate: m.rate || 0, img: m.img || '',
+    email: m.email.toLowerCase(), is_admin: !!m.isAdmin, is_billing: !!m.isBilling, is_assistant: !!m.isAdmin_assistant,
+  };
+}
 export function rowToMessage(r: Row): ChatMessage {
   return { id: r.id, room: r.room_id, who: r.sender_id, text: r.content, time: r.created_at };
 }
@@ -83,16 +96,18 @@ export function rowToMessage(r: Row): ChatMessage {
 export async function loadAll() {
   const sb = getSupabase();
   if (!sb) throw new Error('No database connection');
-  const [pRes, tRes, cRes, aRes] = await Promise.all([
+  const [mRes, pRes, tRes, cRes, aRes] = await Promise.all([
+    sb.from('team_members').select('*').order('created_at'),
     sb.from('projects').select('*').order('created_at', { ascending: false }),
     sb.from('tasks').select('*').order('due_date'),
     sb.from('clients').select('*').order('name'),
     sb.from('activity').select('*').order('created_at', { ascending: false }).limit(20),
   ]);
-  for (const res of [pRes, tRes, cRes, aRes]) if (res.error) throw res.error;
+  for (const res of [mRes, pRes, tRes, cRes, aRes]) if (res.error) throw res.error;
   const sample = pRes.data?.[0];
   if (sample) for (const c of OPTIONAL_PROJECT_COLS) if (c in sample) projectCols.add(c);
   return {
+    team: (mRes.data || []).map(rowToMember),
     projects: (pRes.data || []).map(rowToProject),
     tasks: (tRes.data || []).map(rowToTask),
     clients: (cRes.data || []).map(rowToClient),
@@ -120,6 +135,8 @@ export type Mutation =
   | { type: 'task_delete'; id: string }
   | { type: 'client'; entity: Client }
   | { type: 'client_delete'; id: string }
+  | { type: 'member'; entity: Member }
+  | { type: 'member_delete'; id: string }
   | { type: 'activity'; entity: { who: string; text: string } }
   | { type: 'message'; entity: { room: string; who: string; text: string } };
 
@@ -140,6 +157,8 @@ export async function write(m: Mutation) {
     case 'task_delete':   res = await del('tasks', m.id); break;
     case 'client':        res = await sb.from('clients').upsert(clientToRow(m.entity), { onConflict: 'id' }); break;
     case 'client_delete': res = await del('clients', m.id); break;
+    case 'member':        res = await sb.from('team_members').upsert(memberToRow(m.entity), { onConflict: 'id' }); break;
+    case 'member_delete': res = await del('team_members', m.id); break;
     case 'activity':      res = await sb.from('activity').insert({ who: m.entity.who, text: m.entity.text }); break;
     case 'message':
       res = await sb.from('messages').insert({ room_id: m.entity.room, sender_id: m.entity.who, content: m.entity.text });

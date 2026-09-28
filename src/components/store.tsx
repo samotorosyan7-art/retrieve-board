@@ -1,24 +1,32 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { SEED_CREDENTIALS, SESSION_KEY } from '@/lib/auth';
+import { DEFAULT_FX } from '@/lib/constants';
 import {
-  DEFAULT_FX, SEED_ACTIVITY, SEED_CLIENTS, SEED_PROJECTS, SEED_TASKS, SEED_TEAM,
-} from '@/lib/constants';
-import { loadAll, loadMessages, rowToActivity, rowToClient, rowToMessage, rowToProject, rowToTask, write, type Mutation } from '@/lib/db';
+  loadAll, loadMessages, rowToActivity, rowToClient, rowToMember, rowToMessage, rowToProject, rowToTask, write, type Mutation,
+} from '@/lib/db';
 import { stat, today } from '@/lib/helpers';
 import { getSupabase } from '@/lib/supabase';
 import type {
-  Activity, ChatMessage, Client, Credential, Currency, Member, Project, StatusId, SyncState, Task, TimeLog,
+  Activity, ChatMessage, Client, Currency, Member, Project, StatusId, SyncState, Task, TimeLog,
 } from '@/lib/types';
 
-/* ── localStorage cache (instant paint + offline fallback) ── */
-const STORE_KEY = 'retrieve_pm_v1';
-type Snapshot = { projects?: Project[]; TASKS?: Task[]; ACTIVITY?: Activity[]; CLIENTS?: Client[]; isDark?: boolean };
+/* ── localStorage: theme (always) + a per-user data cache for instant paint, wiped on sign-out ── */
+const THEME_KEY = 'retrieve_theme';
+const CACHE_KEY = 'retrieve_cache_v2';
+const LEGACY_KEYS = ['retrieve_pm_v1', 'retrieve_session']; // pre-auth versions — removed on load
+type Snapshot = { owner: string; team: Member[]; projects: Project[]; tasks: Task[]; clients: Client[]; activity: Activity[] };
 
-function readSnapshot(): Snapshot | null {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch { return null; }
+function readCache(owner: string): Snapshot | null {
+  try {
+    const snap = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null') as Snapshot | null;
+    return snap?.owner === owner ? snap : null;
+  } catch { return null; }
 }
+
+/** 'loading' until the session is known and (if signed in) the team is loaded.
+ *  'noAccess' = signed in to Supabase but not listed in team_members. */
+export type AuthStatus = 'loading' | 'signedOut' | 'noAccess' | 'signedIn';
 
 export type ModalState =
   | { kind: 'task'; id: string | null }
@@ -32,15 +40,14 @@ export type ConfirmState = { title: string; msg: string; confirmLabel?: string; 
 type Toast = { id: number; icon: string; title: string; msg: string; leaving: boolean };
 
 function useStoreValue() {
-  const [hydrated, setHydrated] = useState(false);
-  const [team, setTeam] = useState<Member[]>(SEED_TEAM);
-  const [creds, setCreds] = useState<Record<string, Credential>>(SEED_CREDENTIALS);
-  const [projects, setProjects] = useState<Project[]>(SEED_PROJECTS);
-  const [tasks, setTasks] = useState<Task[]>(SEED_TASKS);
-  const [clients, setClients] = useState<Client[]>(SEED_CLIENTS);
-  const [activity, setActivity] = useState<Activity[]>(SEED_ACTIVITY);
+  const [sessionEmail, setSessionEmail] = useState<string | null | undefined>(undefined); // undefined = not checked yet
+  const [teamLoaded, setTeamLoaded] = useState(false);
+  const [team, setTeam] = useState<Member[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [activity, setActivity] = useState<Activity[]>([]);
   const [isDark, setIsDark] = useState(true);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [sync, setSync] = useState<SyncState>('hidden');
   const [selectedPid, setSelectedPid] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState | null>(null);
@@ -52,7 +59,14 @@ function useStoreValue() {
   const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({});
   const [chatUnread, setChatUnread] = useState(0);
 
-  const currentUser = team.find(e => e.id === currentUserId) ?? null;
+  const currentUser = (sessionEmail && team.find(e => e.email.toLowerCase() === sessionEmail)) || null;
+  const currentUserId = currentUser?.id ?? null;
+  const authStatus: AuthStatus =
+    sessionEmail === undefined ? 'loading'
+    : sessionEmail === null ? 'signedOut'
+    : !teamLoaded ? 'loading'
+    : currentUser ? 'signedIn' : 'noAccess';
+  const hydrated = authStatus !== 'loading';
 
   // Refs so async callbacks (realtime, debounces) always see fresh state.
   const state = useRef({ projects, tasks, clients, currentUser });
@@ -86,7 +100,7 @@ function useStoreValue() {
     if (n > 0) dirty.current.set(key, n); else dirty.current.delete(key);
   };
   const mutationKey = (m: Mutation) => {
-    const table = { project: 'projects', project_delete: 'projects', task: 'tasks', task_delete: 'tasks', client: 'clients', client_delete: 'clients' }[m.type as string];
+    const table = { project: 'projects', project_delete: 'projects', task: 'tasks', task_delete: 'tasks', client: 'clients', client_delete: 'clients', member: 'team_members', member_delete: 'team_members' }[m.type as string];
     const id = 'entity' in m ? (m.entity as { id?: string }).id : 'id' in m ? m.id : undefined;
     return table && id ? `${table}:${id}` : null;
   };
@@ -105,7 +119,8 @@ function useStoreValue() {
     } catch (e) {
       console.warn('Save error', e);
       setSync('error');
-      if (m.type.endsWith('_delete')) toast('⚠️', 'Delete failed', 'The database did not remove it — it has been restored.');
+      if (m.type === 'member' || m.type === 'member_delete') toast('⚠️', 'Not saved', 'Only admins can change the team.');
+      else if (m.type.endsWith('_delete')) toast('⚠️', 'Delete failed', 'The database did not remove it — it has been restored.');
       else toast('⚠️', 'Sync issue', 'Changes saved locally. Will retry on next action.');
       return false;
     } finally {
@@ -119,6 +134,8 @@ function useStoreValue() {
   const reload = useCallback(async () => {
     try {
       const data = await loadAll();
+      setTeam(data.team);
+      setTeamLoaded(true);
       // isPrivate / createdBy have no DB columns — keep what this browser knows.
       const prev = new Map(state.current.projects.map(p => [p.id, p]));
       setProjects(data.projects.map(p => {
@@ -135,27 +152,39 @@ function useStoreValue() {
     }
   }, []);
 
-  // Mount: local cache → session restore → live data → realtime.
+  // Mount: theme, then follow the Supabase Auth session.
   useEffect(() => {
-    const snap = readSnapshot();
-    if (snap) {
-      if (snap.projects) setProjects(snap.projects.map(p => ({ ...p, status: (p.status as string) === 'active' ? 'inprogress' : p.status })));
-      if (snap.TASKS) setTasks(snap.TASKS);
-      if (snap.ACTIVITY) setActivity(snap.ACTIVITY);
-      if (snap.CLIENTS) setClients(snap.CLIENTS);
-      if (typeof snap.isDark === 'boolean') setIsDark(snap.isDark);
-    }
     try {
-      const role = sessionStorage.getItem(SESSION_KEY);
-      if (role && SEED_CREDENTIALS[role]) setCurrentUserId(SEED_CREDENTIALS[role].teamId);
+      LEGACY_KEYS.forEach(k => { localStorage.removeItem(k); sessionStorage.removeItem(k); });
+      if (localStorage.getItem(THEME_KEY) === 'light') setIsDark(false);
     } catch {}
-    setHydrated(true);
+    const sb = getSupabase();
+    if (!sb) { setSessionEmail(null); return; }
+    sb.auth.getSession().then(({ data }) => setSessionEmail(data.session?.user.email?.toLowerCase() ?? null));
+    const { data: sub } = sb.auth.onAuthStateChange((_event, session) => {
+      setSessionEmail(session?.user.email?.toLowerCase() ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // While signed in: cached data → live data → realtime. On sign-out: clear everything.
+  useEffect(() => {
+    if (!sessionEmail) {
+      setTeam([]); setProjects([]); setTasks([]); setClients([]); setActivity([]); setChatMessages({});
+      setTeamLoaded(false); setSelectedPid(null); setModal(null);
+      return;
+    }
+    const snap = readCache(sessionEmail);
+    if (snap) {
+      setTeam(snap.team); setProjects(snap.projects); setTasks(snap.tasks); setClients(snap.clients); setActivity(snap.activity);
+      setTeamLoaded(true);
+    }
     reload();
 
     const sb = getSupabase();
     if (!sb) return;
     const channel = sb.channel('retrieve-live');
-    for (const table of ['projects', 'tasks', 'clients', 'activity']) {
+    for (const table of ['team_members', 'projects', 'tasks', 'clients', 'activity']) {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, payload => applyRealtime(table, payload));
     }
     let connectedOnce = false;
@@ -164,7 +193,7 @@ function useStoreValue() {
       if (status === 'SUBSCRIBED') { if (connectedOnce) reload(); connectedOnce = true; }
     });
     return () => { sb.removeChannel(channel); };
-  }, [reload]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sessionEmail, reload]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Apply one realtime change to local state — only the affected row re-renders. */
   function applyRealtime(table: string, payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) {
@@ -189,7 +218,9 @@ function useStoreValue() {
     };
     const isDelete = payload.eventType === 'DELETE';
 
-    if (table === 'projects') {
+    if (table === 'team_members') {
+      setTeam(ms => upsertOrDelete(ms, isDelete ? null : rowToMember(row)));
+    } else if (table === 'projects') {
       setProjects(ps => {
         const old = ps.find(x => x.id === id);
         const next = isDelete ? null : rowToProject(row);
@@ -203,19 +234,19 @@ function useStoreValue() {
     }
   }
 
-  // Keep cache fresh.
+  // Keep the per-user cache fresh (only once real data for a member is loaded).
   useEffect(() => {
-    if (!hydrated) return;
+    if (authStatus !== 'signedIn' || !sessionEmail) return;
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify({
-        projects, TASKS: tasks, ACTIVITY: activity, CLIENTS: clients, isDark, savedAt: new Date().toISOString(),
-      }));
+      const snap: Snapshot = { owner: sessionEmail, team, projects, tasks, clients, activity };
+      localStorage.setItem(CACHE_KEY, JSON.stringify(snap));
     } catch {}
-  }, [hydrated, projects, tasks, activity, clients, isDark]);
+  }, [authStatus, sessionEmail, team, projects, tasks, activity, clients]);
 
   // Theme attribute.
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    try { localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light'); } catch {}
   }, [isDark]);
 
   // Chat realtime — only while signed in.
@@ -239,19 +270,31 @@ function useStoreValue() {
     return () => { sb.removeChannel(channel); };
   }, [currentUserId]);
 
-  /* ── Auth ── */
-  const login = (role: string) => {
-    const cred = creds[role];
-    if (!cred || !team.some(e => e.id === cred.teamId)) return false;
-    setCurrentUserId(cred.teamId);
-    try { sessionStorage.setItem(SESSION_KEY, role); } catch {}
-    return true;
+  /* ── Auth (Supabase Auth — passwords never touch this code) ── */
+  /** Returns an error message, or null on success. */
+  const login = async (email: string, password: string) => {
+    const sb = getSupabase();
+    if (!sb) return 'The app is not connected to the database.';
+    const { error } = await sb.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    if (!error) return null;
+    if (/invalid login/i.test(error.message)) return 'Incorrect email or password.';
+    if (/rate limit|too many/i.test(error.message)) return 'Too many attempts. Please wait a few minutes and try again.';
+    if (/not confirmed/i.test(error.message)) return 'Please accept your invitation email first.';
+    return error.message;
   };
-  const logout = () => {
-    try { sessionStorage.removeItem(SESSION_KEY); } catch {}
-    setCurrentUserId(null);
-    setSelectedPid(null);
-    setModal(null);
+  const logout = async () => {
+    try { localStorage.removeItem(CACHE_KEY); } catch {}
+    await getSupabase()?.auth.signOut();
+    setSessionEmail(null);
+  };
+  /** Emails a link to /reset-password where the user sets a new password. */
+  const sendPasswordEmail = async (email: string) => {
+    const sb = getSupabase();
+    if (!sb) return 'The app is not connected to the database.';
+    const { error } = await sb.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: `${location.origin}/reset-password`,
+    });
+    return error ? error.message : null;
   };
 
   /* ── Activity ── */
@@ -262,7 +305,7 @@ function useStoreValue() {
     ownActivity.current.push(`${who}|${text}`);
     persist({ type: 'activity', entity: { who, text } });
   };
-  const me = () => state.current.currentUser?.id || 'fh';
+  const me = () => state.current.currentUser?.id ?? '';
 
   /* ── Projects ── */
   const saveProject = (p: Project) => {
@@ -403,15 +446,13 @@ function useStoreValue() {
     });
   };
 
-  /* ── Team (in-memory, like the original — there is no team table) ── */
-  const saveMember = (m: Member, cred?: { emailHash: string; passHash: string }) => {
+  /* ── Team (team_members table — the database only lets admins change it) ── */
+  const saveMember = async (m: Member) => {
+    const prev = team;
     setTeam(ts => (ts.some(x => x.id === m.id) ? ts.map(x => (x.id === m.id ? m : x)) : [...ts, m]));
-    if (cred) {
-      setCreds(cs => {
-        const key = Object.keys(cs).find(k => cs[k].teamId === m.id) ?? m.id;
-        return { ...cs, [key]: { teamId: m.id, ...cred } };
-      });
-    }
+    const ok = await persist({ type: 'member', entity: m });
+    if (!ok) setTeam(prev);
+    return ok;
   };
   const deleteMember = (id: string) => {
     const e = team.find(x => x.id === id);
@@ -419,12 +460,12 @@ function useStoreValue() {
     if (e.isAdmin) { toast('⚠️', 'Cannot delete', 'Cannot remove the firm admin.'); return; }
     setConfirmState({
       title: 'Remove team member?',
-      msg: `Remove ${e.name} from the team? Their tasks and time logs will remain.`,
+      msg: `Remove ${e.name} from the team? They will lose access immediately. Their tasks and time logs remain.`,
       confirmLabel: 'Remove',
-      onConfirm: () => {
+      onConfirm: async () => {
         setTeam(ts => ts.filter(x => x.id !== id));
-        setCreds(cs => Object.fromEntries(Object.entries(cs).filter(([, c]) => c.teamId !== id)));
-        toast('🗑️', 'Member removed', e.name);
+        if (await persist({ type: 'member_delete', id })) toast('🗑️', 'Member removed', e.name);
+        else reload();
       },
     });
   };
@@ -452,17 +493,17 @@ function useStoreValue() {
   const emp = (id: string) => team.find(e => e.id === id);
   const openPanel = (id: string) => setSelectedPid(cur => (cur === id ? null : id));
   const clearSavedState = () => {
-    localStorage.removeItem(STORE_KEY);
-    toast('🗑️', 'State cleared', 'Refreshing to defaults…');
-    setTimeout(() => location.reload(), 1200);
+    localStorage.removeItem(CACHE_KEY);
+    toast('🗑️', 'Cache cleared', 'Reloading from the database…');
+    reload();
   };
 
   return {
-    hydrated, team, creds, projects, tasks, clients, activity, isDark, currentUser, sync,
+    hydrated, authStatus, team, projects, tasks, clients, activity, isDark, currentUser, sync,
     selectedPid, modal, toasts, confirmState, setConfirmState, search, billingCurrency, fx, chatMessages, chatUnread,
     setSearch, setBillingCurrency, setFx, setSelectedPid, setModal,
     toggleTheme: () => setIsDark(d => !d),
-    toast, login, logout, emp, openPanel, closePanel: () => setSelectedPid(null),
+    toast, login, logout, sendPasswordEmail, emp, openPanel, closePanel: () => setSelectedPid(null),
     closeModal: () => setModal(null),
     addActivity, saveProject, patchProject, setStatus, setProgress, togglePrivacy, addTimeLog, createProject, archiveProject, deleteProject,
     saveTask, toggleTask, toggleSubtask, addSubtask, deleteTask,

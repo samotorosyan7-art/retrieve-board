@@ -67,3 +67,6 @@ export function canSeeMatter(p: Project, user: Member | null) {
   if (!user) return false;
   return p.createdBy === user.id || user.isAdmin;
 }
+
+/** Direct-message room shared by two members: 'dm_<a>__<b>' with ids sorted (must match migration 002). */
+export const dmRoom = (a: string, b: string) => 'dm_' + [a, b].sort().join('__');

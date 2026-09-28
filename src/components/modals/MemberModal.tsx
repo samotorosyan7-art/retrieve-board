@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { sha256hex } from '@/lib/auth';
 import type { Member } from '@/lib/types';
 import { useStore } from '../store';
 import { ModalFooter, ModalHeader } from './ModalHost';
@@ -9,7 +8,7 @@ import { ModalFooter, ModalHeader } from './ModalHost';
 type Access = 'member' | 'assistant' | 'billing' | 'admin';
 
 export function MemberModal({ id }: { id: string | null }) {
-  const { team, creds, saveMember, toast, closeModal } = useStore();
+  const { team, saveMember, sendPasswordEmail, toast, closeModal } = useStore();
   const e = id ? team.find(x => x.id === id) : undefined;
   const [name, setName] = useState(e?.name || '');
   const [init, setInit] = useState(e?.init || '');
@@ -21,11 +20,12 @@ export function MemberModal({ id }: { id: string | null }) {
   const [access, setAccess] = useState<Access>(
     e?.isAdmin ? 'admin' : e?.isAdmin_assistant ? 'assistant' : e?.isBilling ? 'billing' : 'member',
   );
-  const [pass, setPass] = useState('');
+  const [busy, setBusy] = useState(false);
 
   async function submit() {
     const n = name.trim(), r = role.trim(), em = email.trim().toLowerCase();
     if (!n || !r || !em) { toast('⚠️', 'Required', 'Name, role and email are required.'); return; }
+    if (team.some(x => x.email.toLowerCase() === em && x.id !== e?.id)) { toast('⚠️', 'Email in use', `${em} already belongs to another member.`); return; }
     const member: Member = {
       id: e?.id ?? 'u' + Date.now(),
       name: n, role: r, email: em,
@@ -36,18 +36,20 @@ export function MemberModal({ id }: { id: string | null }) {
       isBilling: access === 'billing' || access === 'admin',
       isAdmin_assistant: access === 'assistant',
     };
-    const cred = pass ? { emailHash: await sha256hex(em), passHash: await sha256hex(pass) } : undefined;
-    saveMember(member, cred);
-
-    if (e) {
-      const hadLogin = Object.values(creds).some(c => c.teamId === e.id);
-      toast('✅', 'Member updated', !pass ? n : hadLogin ? `${n} — password updated.` : `${n} — password set, they can now log in.`);
-    } else if (pass) {
-      toast('✅', 'Member added', `${n} added and can now log in.`);
-    } else {
-      toast('⚠️', 'Member added — no password set', `${n} added but cannot log in yet. Edit them to set a password.`);
-    }
+    setBusy(true);
+    const ok = await saveMember(member);
+    setBusy(false);
+    if (!ok) return;
+    if (e) toast('✅', 'Member updated', n);
+    else toast('✅', 'Member added', `Now invite ${em} from Supabase → Authentication → Users → Invite user.`);
     closeModal();
+  }
+
+  async function sendLink() {
+    if (!e) return;
+    const err = await sendPasswordEmail(e.email);
+    if (err) toast('⚠️', 'Email not sent', err);
+    else toast('📧', 'Email sent', `${e.name.split(' ')[0]} will receive a link to set a new password.`);
   }
 
   return (
@@ -63,7 +65,10 @@ export function MemberModal({ id }: { id: string | null }) {
         </div>
         <div className="form-grid">
           <div><label className="form-label">Role / Title *</label><input className="input" value={role} onChange={x => setRole(x.target.value)} placeholder="e.g. Associate Attorney" /></div>
-          <div><label className="form-label">Work Email *</label><input className="input" type="email" value={email} onChange={x => setEmail(x.target.value)} placeholder="name@retrieve.am" /></div>
+          <div>
+            <label className="form-label">Work Email * <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(their login)</span></label>
+            <input className="input" type="email" value={email} onChange={x => setEmail(x.target.value)} placeholder="name@retrieve.am" />
+          </div>
         </div>
         <div className="form-grid">
           <div><label className="form-label">Hourly Rate (USD)</label><input className="input" type="number" value={rate} onChange={x => setRate(x.target.value)} placeholder="150" /></div>
@@ -84,11 +89,17 @@ export function MemberModal({ id }: { id: string | null }) {
             </select>
           </div>
           <div>
-            <label className="form-label">New Password (leave blank to keep)</label>
-            <input className="input" type="password" value={pass} onChange={x => setPass(x.target.value)} placeholder="NewPassword2026!" />
+            <label className="form-label">Password</label>
+            {e ? (
+              <button type="button" className="btn-outline" style={{ width: '100%' }} onClick={sendLink}>📧 Send password email</button>
+            ) : (
+              <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', lineHeight: 1.5, paddingTop: 6 }}>
+                After saving, invite this email from Supabase → Authentication so they can set a password.
+              </div>
+            )}
           </div>
         </div>
-        <ModalFooter label={e ? 'Save Changes' : 'Add Member'} onSubmit={submit} />
+        <ModalFooter label={busy ? 'Saving…' : e ? 'Save Changes' : 'Add Member'} onSubmit={submit} />
       </div>
     </>
   );

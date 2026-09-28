@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { sha256hex } from '@/lib/auth';
 import { LOGO_SRC } from '@/lib/constants';
 import { useStore } from '@/components/store';
 
@@ -16,63 +15,40 @@ const FEATURES: [string, string][] = [
 ];
 
 export default function LandingPage() {
-  const { hydrated, currentUser, creds, login, isDark, toggleTheme } = useStore();
+  const { authStatus, login, logout, sendPasswordEmail, isDark, toggleTheme } = useStore();
   const router = useRouter();
 
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
-  const [lockLeft, setLockLeft] = useState(0);
   const passRef = useRef<HTMLInputElement>(null);
-  // Brute-force state (in-memory only, resets on page refresh)
-  const fails = useRef(0);
-  const lockDuration = useRef(30);
 
   useEffect(() => {
-    if (hydrated && currentUser) router.replace('/dashboard');
-  }, [hydrated, currentUser, router]);
-
-  useEffect(() => {
-    if (lockLeft <= 0) return;
-    const t = setTimeout(() => setLockLeft(n => n - 1), 1000);
-    return () => clearTimeout(t);
-  }, [lockLeft]);
-
-  const locked = lockLeft > 0;
+    if (authStatus === 'signedIn') router.replace('/dashboard');
+  }, [authStatus, router]);
 
   async function attemptLogin() {
-    if (locked) return;
-    const emailRaw = email.trim().toLowerCase();
-    if (!emailRaw || !pass) { setError('Please enter your email and password.'); return; }
-
-    setBusy(true);
-    const [eHash, pHash] = await Promise.all([sha256hex(emailRaw), sha256hex(pass)]);
-    const role = Object.entries(creds).find(([, c]) => c.emailHash === eHash && c.passHash === pHash)?.[0];
+    if (!email.trim() || !pass) { setError('Please enter your email and password.'); return; }
+    setBusy(true); setError(''); setNotice('');
+    const err = await login(email, pass);
     setBusy(false);
-
-    if (!role) {
-      fails.current++;
-      // Deliberate small delay to slow automated attacks
-      await new Promise(r => setTimeout(r, 600));
-      if (fails.current >= 5) {
-        setError('');
-        setLockLeft(lockDuration.current);
-        lockDuration.current = Math.min(lockDuration.current * 2, 600); // max 10 min
-        fails.current = 0;
-      } else {
-        const left = 5 - fails.current;
-        setError(`Incorrect email or password. ${left} attempt${left === 1 ? '' : 's'} remaining.`);
-      }
+    if (err) {
+      setError(err);
       setPass('');
       passRef.current?.focus();
-      return;
     }
+  }
 
-    fails.current = 0;
-    setError('');
-    if (login(role)) router.push('/dashboard');
+  async function forgotPassword() {
+    if (!email.trim()) { setError('Enter your work email above, then click "Forgot password?" again.'); return; }
+    setBusy(true); setError(''); setNotice('');
+    const err = await sendPasswordEmail(email);
+    setBusy(false);
+    if (err) setError(err);
+    else setNotice(`If ${email.trim()} has an account, a link to set a new password is on its way.`);
   }
 
   return (
@@ -122,11 +98,15 @@ export default function LandingPage() {
           <div className="lc-title">Welcome back</div>
           <div className="lc-sub">Retrieve Legal &amp; Tax · Internal Platform</div>
 
-          {error && !locked && <div className="login-error">{error}</div>}
-          {locked && (
-            <div className="login-locked">
-              🔒 Too many failed attempts.<br />Account locked for <span>{lockLeft}</span>s.
+          {authStatus === 'noAccess' && (
+            <div className="login-error">
+              This account isn&apos;t on the Retrieve team list. Ask Feliks to add you.{' '}
+              <a href="#" onClick={e => { e.preventDefault(); logout(); }} style={{ textDecoration: 'underline' }}>Sign out</a>
             </div>
+          )}
+          {error && <div className="login-error">{error}</div>}
+          {notice && (
+            <div className="login-error" style={{ background: 'rgba(52,211,153,0.1)', borderColor: 'rgba(52,211,153,0.3)', color: '#34D399' }}>{notice}</div>
           )}
 
           <label className="lc-label">Work email</label>
@@ -149,11 +129,16 @@ export default function LandingPage() {
             </button>
           </div>
 
-          <button className="btn-primary" disabled={busy || locked} onClick={attemptLogin}>
-            {busy ? 'Signing in…' : 'Sign In →'}
+          <button className="btn-primary" disabled={busy || authStatus === 'loading'} onClick={attemptLogin}>
+            {busy ? 'Please wait…' : 'Sign In →'}
           </button>
+          <div style={{ textAlign: 'right', marginTop: 10 }}>
+            <a href="#" onClick={e => { e.preventDefault(); forgotPassword(); }} style={{ fontSize: 12, color: 'var(--text-secondary)', textDecoration: 'underline' }}>
+              Forgot password?
+            </a>
+          </div>
           <div className="lc-note" style={{ marginTop: 12 }}>
-            Use your <strong>@retrieve.am</strong> email and your assigned password.<br />
+            Use your <strong>@retrieve.am</strong> email. First time here? Use the link in your invitation email.<br />
             Contact Feliks for access issues.
           </div>
         </div>
