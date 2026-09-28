@@ -149,6 +149,8 @@ function useStoreValue() {
     } catch (e) {
       console.warn('DB load error — using local cache', e);
       setSync('error');
+      // Don't hang on "loading" if the team list can't be read (e.g. migration 002 not run yet).
+      setTeamLoaded(true);
     }
   }, []);
 

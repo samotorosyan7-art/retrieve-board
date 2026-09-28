@@ -101,7 +101,7 @@ export default function LandingPage() {
 
           {authStatus === 'noAccess' && (
             <div className="login-error">
-              This account isn&apos;t on the Retrieve team list. Ask Feliks to add you.{' '}
+              Signed in, but this account isn&apos;t on the Retrieve team list (or the database setup isn&apos;t finished). Ask an admin to add you.{' '}
               <a href="#" onClick={e => { e.preventDefault(); logout(); }} style={{ textDecoration: 'underline' }}>Sign out</a>
             </div>
           )}
