@@ -6,7 +6,6 @@ import { fmtDate } from '@/lib/helpers';
 // Server-only: RESEND_API_KEY must never be exposed to the browser.
 // RESEND_FROM must use a domain verified in Resend; onboarding@resend.dev only delivers to the Resend account owner.
 const FROM = process.env.RESEND_FROM || 'Retrieve PM <onboarding@resend.dev>';
-const APP_URL = process.env.APP_URL || 'https://retrieve.group';
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://lvtipqzcupegawhufzsw.supabase.co';
 const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY || 'sb_publishable_J8YC4rtR3fqhkSFFG5cBJg_FRP0jmN7';
 
@@ -17,6 +16,8 @@ const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt
 export async function POST(req: Request) {
   const key = process.env.RESEND_API_KEY;
   if (!key) return NextResponse.json({ sent: false, reason: 'disabled' });
+  // Link in the email: APP_URL if set, otherwise the site the request came from.
+  const APP_URL = process.env.APP_URL || new URL(req.url).origin;
 
   // Only signed-in team members may trigger emails. Queries run as the caller, so RLS applies.
   const token = req.headers.get('authorization')?.replace(/^Bearer /, '');
