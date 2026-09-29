@@ -118,8 +118,8 @@ function NotifPanel() {
 const INTEGRATIONS: { icon: string; name: string; desc: React.ReactNode; connected: boolean }[] = [
   { icon: '🗂️', name: 'Google Drive', desc: "Auto-sync uploaded files to the firm's shared Drive folder.", connected: true },
   {
-    icon: '📧', name: 'Gmail / SMTP (EmailJS)', connected: false,
-    desc: <>Send email notifications when tasks are assigned. <a href="https://emailjs.com" target="_blank" rel="noreferrer" style={{ color: 'var(--s-billing)' }}>Setup at emailjs.com →</a></>,
+    icon: '📧', name: 'Email (Resend)', connected: true,
+    desc: <>Send email notifications when tasks are assigned. <a href="https://resend.com" target="_blank" rel="noreferrer" style={{ color: 'var(--s-billing)' }}>Manage at resend.com →</a></>,
   },
   { icon: '📅', name: 'Google Calendar', desc: 'Sync task deadlines with your Google Calendar.', connected: false },
   { icon: '📊', name: 'Google Sheets', desc: 'Export billing data automatically to Sheets.', connected: false },
