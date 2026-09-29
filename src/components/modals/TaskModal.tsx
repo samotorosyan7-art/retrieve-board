@@ -6,6 +6,7 @@ import { sendTaskAssignmentEmail } from '@/lib/email';
 import type { PriorityId, Task } from '@/lib/types';
 import { useStore } from '../store';
 import { ModalFooter, ModalHeader } from './ModalHost';
+import { CircleCheckIcon, MailIcon, TriangleAlertIcon } from 'lucide-react';
 
 export function TaskModal({ id }: { id: string | null }) {
   const { tasks, projects, currentUser, emp, saveTask, toast, closeModal } = useStore();
@@ -20,16 +21,16 @@ export function TaskModal({ id }: { id: string | null }) {
   const [notes, setNotes] = useState(t?.notes || '');
 
   function submit() {
-    if (!title.trim()) { toast('⚠️', 'Required', 'A title is required.'); return; }
+    if (!title.trim()) { toast(TriangleAlertIcon, 'Required', 'A title is required.'); return; }
     const data = { title: title.trim(), pid, priority, due, time, estHours: parseFloat(est || '0') || 0, notes: notes.trim() };
     const task: Task = t
       ? { ...t, ...data }
       : { id: 't' + Date.now(), who: currentUser?.id || 'fh', done: false, subtasks: [], ...data };
     saveTask(task);
     sendTaskAssignmentEmail(task, emp(task.who), currentUser, projects.find(p => p.id === task.pid)).then(sent => {
-      if (sent) toast('📧', 'Email sent', `${emp(task.who)?.name.split(' ')[0]} notified of a new to-do.`);
+      if (sent) toast(MailIcon, 'Email sent', `${emp(task.who)?.name.split(' ')[0]} notified of a new to-do.`);
     });
-    toast('✅', t ? 'To-do updated' : 'To-do added', data.title);
+    toast(CircleCheckIcon, t ? 'To-do updated' : 'To-do added', data.title);
     closeModal();
   }
 

@@ -5,6 +5,7 @@ import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
 import { AvStack, PageHeader, Tag } from '@/components/ui';
 import { firstWords, fmtDate, isOD, pri, progColor, stat } from '@/lib/helpers';
+import { LockIcon, PlusIcon, TriangleAlertIcon } from 'lucide-react';
 
 export default function ListPage() {
   const { selectedPid, setModal, openPanel } = useStore();
@@ -19,7 +20,7 @@ export default function ListPage() {
           <button className="seg-btn active">List</button>
           <button className="seg-btn" onClick={() => go('kanban')}>Kanban</button>
         </div>
-        <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}>＋ New Task</button>
+        <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}><PlusIcon size={14} /> New Task</button>
       </PageHeader>
       <MatterFilterRow {...filters} withStatus />
 
@@ -42,7 +43,7 @@ export default function ListPage() {
                 const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
                 return (
                   <tr key={p.id} className={p.id === selectedPid ? 'selected' : ''} onClick={() => openPanel(p.id)}>
-                    <td><div className="dt-title">{p.title}{p.isPrivate && <span className="dt-private-badge">🔒 Private</span>}</div></td>
+                    <td><div className="dt-title">{p.title}{p.isPrivate && <span className="dt-private-badge"><LockIcon size={10} /> Private</span>}</div></td>
                     <td><div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.client}</div></td>
                     <td><div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>{p.matterType || '—'}</div></td>
                     <td><div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>{firstWords(p.area, 3)}</div></td>
@@ -56,7 +57,7 @@ export default function ListPage() {
                       </div>
                     </td>
                     <td style={{ fontSize: 11.5, fontFamily: 'var(--font-mono)', color: od ? 'var(--p-high)' : 'var(--text-tertiary)' }}>
-                      {od ? '⚠ ' : ''}{fmtDate(p.due)}
+                      {od && <><TriangleAlertIcon size={11} /> </>}{fmtDate(p.due)}
                     </td>
                   </tr>
                 );

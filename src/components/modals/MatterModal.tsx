@@ -6,6 +6,7 @@ import type { PriorityId, StatusId } from '@/lib/types';
 import { useStore } from '../store';
 import { Photo } from '../ui';
 import { ModalFooter, ModalHeader } from './ModalHost';
+import { CircleCheckIcon, GlobeIcon, LockIcon, TriangleAlertIcon } from 'lucide-react';
 
 export function MatterModal({ client: initialClient = '' }: { client?: string }) {
   const { team, clients, createProject, toast, closeModal } = useStore();
@@ -24,10 +25,10 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
     setAssignees(a => (a.includes(id) ? a.filter(x => x !== id) : [...a, id]));
 
   function submit() {
-    if (!title.trim() || !client.trim()) { toast('⚠️', 'Missing info', 'Title and client are required.'); return; }
+    if (!title.trim() || !client.trim()) { toast(TriangleAlertIcon, 'Missing info', 'Title and client are required.'); return; }
     const p = createProject({ title: title.trim(), client: client.trim(), area, matterType, status, priority, assignees, due, notes, isPrivate });
     closeModal();
-    toast('✅', 'Task created', `"${p.title}" added to the board.`);
+    toast(CircleCheckIcon, 'Task created', `"${p.title}" added to the board.`);
   }
 
   return (
@@ -88,7 +89,7 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
         </div>
         <div className={`nm-privacy-row${isPrivate ? ' private' : ''}`}>
           <label className="nm-privacy-label" onClick={() => setIsPrivate(v => !v)}>
-            <div className="nm-priv-icon">{isPrivate ? '🔒' : '🌐'}</div>
+            <div className="nm-priv-icon">{isPrivate ? <LockIcon size={20} /> : <GlobeIcon size={20} />}</div>
             <div>
               <div className="nm-priv-title">{isPrivate ? 'Private task' : 'Public task'}</div>
               <div className="nm-priv-sub">{isPrivate ? 'Only visible to you' : 'Visible to your whole team'}</div>

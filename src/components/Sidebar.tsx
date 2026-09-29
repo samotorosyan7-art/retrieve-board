@@ -6,8 +6,10 @@ import { LOGO_SRC } from '@/lib/constants';
 import { isOpen } from '@/lib/helpers';
 import { useNav } from './nav';
 import { useStore } from './store';
+import { Building2Icon, CalendarIcon, KeyRoundIcon, LayoutDashboardIcon, ListChecksIcon, ListIcon, LogOutIcon, MessagesSquareIcon, MoonIcon, ReceiptIcon, SettingsIcon, SquareKanbanIcon, SunIcon, TimerIcon, UsersIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
-type NavItem = { id: string; icon: string; label: string; badge?: number; badgeStyle?: React.CSSProperties };
+type NavItem = { id: string; icon: LucideIcon; label: string; badge?: number; badgeStyle?: React.CSSProperties };
 
 export function Sidebar() {
   const { currentUser, clients, tasks, projects, chatUnread, search, setSearch, isDark, toggleTheme, logout } = useStore();
@@ -20,11 +22,11 @@ export function Sidebar() {
   const isBilling = !!(currentUser.isBilling || currentUser.isAdmin);
   const pendingTasks = tasks.filter(t => t.who === currentUser.id && !t.done).length
     + projects.filter(p => isOpen(p) && p.assignees.includes(currentUser.id)).length;
-  const myTasks = { id: 'tasks', icon: '✓', label: 'My Tasks', badge: pendingTasks };
+  const myTasks = { id: 'tasks', icon: ListChecksIcon, label: 'My Tasks', badge: pendingTasks };
 
   const link = (n: NavItem) => (
     <div key={n.id} className={`nav-link${page === n.id ? ' active' : ''}`} onClick={() => go(n.id)} data-page={n.id}>
-      <span className="nl-icon">{n.icon}</span>
+      <span className="nl-icon"><n.icon size={15} /></span>
       <span className="nl-label">{n.label}</span>
       {!!n.badge && <span className="nl-badge" style={n.badgeStyle}>{n.badge}</span>}
     </div>
@@ -45,27 +47,28 @@ export function Sidebar() {
       <div className="sb-nav">
         <div className="sb-section">Overview</div>
         {!isAdmin && link(myTasks)}
-        {link({ id: 'dashboard', icon: '◉', label: 'Dashboard' })}
+        {link({ id: 'dashboard', icon: LayoutDashboardIcon, label: 'Dashboard' })}
         <div className="sb-section">Tasks</div>
-        {link({ id: 'kanban', icon: '⊞', label: 'Kanban Board' })}
-        {link({ id: 'list', icon: '≡', label: 'All Tasks' })}
-        {link({ id: 'calendar', icon: '📅', label: 'Calendar' })}
-        {link({ id: 'clients', icon: '🏢', label: 'Clients', badge: clients.length, badgeStyle: { background: 'var(--s-done)' } })}
-        {link({ id: 'team', icon: '👥', label: 'Team Workload' })}
+        {link({ id: 'kanban', icon: SquareKanbanIcon, label: 'Kanban Board' })}
+        {link({ id: 'list', icon: ListIcon, label: 'All Tasks' })}
+        {link({ id: 'calendar', icon: CalendarIcon, label: 'Calendar' })}
+        {link({ id: 'clients', icon: Building2Icon, label: 'Clients', badge: clients.length, badgeStyle: { background: 'var(--s-done)' } })}
+        {link({ id: 'team', icon: UsersIcon, label: 'Team Workload' })}
+        {link({ id: 'logs', icon: TimerIcon, label: 'Logs' })}
         {isAdmin && link(myTasks)}
-        {link({ id: 'chat', icon: '💬', label: 'Team Chat', badge: chatUnread })}
+        {link({ id: 'chat', icon: MessagesSquareIcon, label: 'Team Chat', badge: chatUnread })}
         {isBilling && (
           <>
             <div className="nav-divider" />
             <div className="sb-section">Finance</div>
-            {link({ id: 'billing', icon: '₾', label: 'Billing & Invoices' })}
+            {link({ id: 'billing', icon: ReceiptIcon, label: 'Billing & Invoices' })}
           </>
         )}
         {isAdmin && (
           <>
             <div className="nav-divider" />
             <div className="sb-section">Admin</div>
-            {link({ id: 'settings', icon: '⚙', label: 'Settings & Access' })}
+            {link({ id: 'settings', icon: SettingsIcon, label: 'Settings & Access' })}
           </>
         )}
       </div>
@@ -82,9 +85,9 @@ export function Sidebar() {
         </div>
         <div><div className="sb-user-name">{currentUser.name}</div><div className="sb-user-role">{currentUser.role}</div></div>
         <div className="sb-actions">
-          <button className="sb-icon-btn" onClick={toggleTheme} title="Toggle theme">{isDark ? '🌙' : '☀️'}</button>
-          <button className="sb-icon-btn" onClick={() => router.push('/reset-password')} title="Change password">🔑</button>
-          <button className="sb-icon-btn" onClick={async () => { await logout(); router.replace('/'); }} title="Sign out">⏻</button>
+          <button className="sb-icon-btn" onClick={toggleTheme} title="Toggle theme">{isDark ? <MoonIcon size={13} /> : <SunIcon size={13} />}</button>
+          <button className="sb-icon-btn" onClick={() => router.push('/reset-password')} title="Change password"><KeyRoundIcon size={13} /></button>
+          <button className="sb-icon-btn" onClick={async () => { await logout(); router.replace('/'); }} title="Sign out"><LogOutIcon size={13} /></button>
         </div>
       </div>
     </nav>

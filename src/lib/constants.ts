@@ -1,4 +1,6 @@
 import type { PriorityId, StatusId } from './types';
+import { Building2Icon, CoffeeIcon, ReceiptIcon, ScaleIcon, SettingsIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 export const AREAS: string[] = ["Corporate & Business Law","Tax Law & Compliance","Immigration & Residency","Intellectual Property","Real Estate & Construction","Banking & Finance","Arbitration & Litigation","Cryptocurrency & Blockchain","Employment Law","Accounting & Bookkeeping","Tax Advisory","M&A Advising","Competition Law","Energy Law","Investment Law","IT & Data Protection","Health & Pharmaceuticals","Retrieve Legal & Tax (Internal)"];
 export const STATUSES: { id: StatusId; label: string; col: string; bg: string }[] = [
@@ -20,17 +22,17 @@ export const PRIORITIES: { id: PriorityId; label: string; col: string; bg: strin
 
 export const CLIENT_TYPES = ["Corporate","Technology","Non-Profit","Healthcare","Finance","Real Estate","Logistics","Design","Legal","Other"];
 
-export const CHAT_ROOMS: { id: string; name: string; icon: string; desc: string; billingOnly?: boolean }[] = [
-  {id:'general',  name:'General',          icon:'🏢', desc:'Firm-wide announcements'},
-  {id:'matters',  name:'Cases',            icon:'⚖️', desc:'Case discussion'},
-  {id:'billing',  name:'Billing',          icon:'₾',  desc:'Invoices & financials', billingOnly:true},
-  {id:'admin',    name:'Admin & Ops',      icon:'⚙',  desc:'Internal office topics'},
-  {id:'random',   name:'Random',           icon:'☕', desc:'Off-topic'},
+export const CHAT_ROOMS: { id: string; name: string; icon: LucideIcon; desc: string; billingOnly?: boolean }[] = [
+  {id:'general',  name:'General',          icon:Building2Icon, desc:'Firm-wide announcements'},
+  {id:'matters',  name:'Cases',            icon:ScaleIcon, desc:'Case discussion'},
+  {id:'billing',  name:'Billing',          icon:ReceiptIcon, desc:'Invoices & financials', billingOnly:true},
+  {id:'admin',    name:'Admin & Ops',      icon:SettingsIcon, desc:'Internal office topics'},
+  {id:'random',   name:'Random',           icon:CoffeeIcon, desc:'Off-topic'},
 ];
 
 export const PAGE_LABELS: Record<string, string> = {
   dashboard:'Dashboard', kanban:'Kanban Board', list:'All Tasks', calendar:'Calendar',
-  team:'Team Workload', tasks:'My Tasks', clients:'Clients', chat:'Team Chat',
+  team:'Team Workload', logs:'Time Logs', tasks:'My Tasks', clients:'Clients', chat:'Team Chat',
   billing:'Billing & Invoices', settings:'Settings & Access',
 };
 

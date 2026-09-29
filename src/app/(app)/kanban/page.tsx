@@ -6,6 +6,7 @@ import { AvStack, PageHeader, Tag } from '@/components/ui';
 import { STATUSES } from '@/lib/constants';
 import { firstWords, fmtShort, isOD, pri, progColor, stat } from '@/lib/helpers';
 import type { StatusId } from '@/lib/types';
+import { GlobeIcon, LockIcon, MoveIcon, PlusIcon, TriangleAlertIcon } from 'lucide-react';
 
 export default function KanbanPage() {
   const { currentUser, selectedPid, setModal, openPanel, setStatus, togglePrivacy, toast } = useStore();
@@ -106,7 +107,7 @@ export default function KanbanPage() {
         const p = f.find(x => x.id === pid);
         if (p && ns && p.status !== ns) {
           setStatus(pid, ns);
-          toast('↕', 'Moved', `"${p.title}" → ${stat(ns).label}`);
+          toast(MoveIcon, 'Moved', `"${p.title}" → ${stat(ns).label}`);
         }
       } else if (!wasDrag) {
         openPanel(pid);
@@ -121,7 +122,7 @@ export default function KanbanPage() {
   return (
     <div className="page active" id="page-kanban">
       <PageHeader title="Kanban" light="Board" sub={`${f.length} task${f.length !== 1 ? 's' : ''} shown · drag a card to another column to move it`}>
-        <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}>＋ New Task</button>
+        <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}><PlusIcon size={14} /> New Task</button>
       </PageHeader>
       <MatterFilterRow {...filters} />
 
@@ -148,7 +149,7 @@ export default function KanbanPage() {
                       style={{ '--card-accent': col.col } as React.CSSProperties}
                       data-pid={p.id}
                     >
-                      {p.isPrivate && <div className="mc-private-badge">🔒 Private</div>}
+                      {p.isPrivate && <div className="mc-private-badge"><LockIcon size={10} /> Private</div>}
                       <div className="mc-top">
                         <div className="mc-title">{p.title}</div>
                         <Tag {...pr} />
@@ -157,7 +158,7 @@ export default function KanbanPage() {
                       <div className="mc-pbar"><div className="pbar"><div className="pbar-fill" style={{ width: `${p.progress}%`, background: progColor(p.progress) }} /></div></div>
                       <div className="mc-foot">
                         <AvStack ids={p.assignees.slice(0, 3)} />
-                        <div className={`mc-due${od ? ' overdue' : ''}`}>{od ? '⚠ ' : ''}{fmtShort(p.due)}</div>
+                        <div className={`mc-due${od ? ' overdue' : ''}`}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtShort(p.due)}</div>
                       </div>
                       <div className="mc-area" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>{p.matterType ? `${p.matterType} · ` : ''}{firstWords(p.area, 3)}</span>
@@ -171,7 +172,7 @@ export default function KanbanPage() {
                               cursor: 'pointer', color: p.isPrivate ? '#7C6FF7' : 'var(--text-tertiary)', opacity: 0.7,
                             }}
                           >
-                            {p.isPrivate ? '🔒' : '🌐'}
+                            {p.isPrivate ? <LockIcon size={12} /> : <GlobeIcon size={12} />}
                           </button>
                         )}
                       </div>

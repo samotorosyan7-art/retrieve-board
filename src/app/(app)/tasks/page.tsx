@@ -6,6 +6,7 @@ import { useStore } from '@/components/store';
 import { AvStack, PageHeader, Tag } from '@/components/ui';
 import { firstWords, fmtShort, isOD, isOpen, isTaskOD, pri, progColor, stat } from '@/lib/helpers';
 import type { Task } from '@/lib/types';
+import { ArrowUpRightIcon, CheckIcon, ClockIcon, LockIcon, PartyPopperIcon, PencilIcon, PlusIcon, RotateCcwIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
 
 type Filter = 'all' | 'pending' | 'done' | 'overdue';
 
@@ -44,7 +45,7 @@ export default function TasksPage() {
   return (
     <div className="page active" id="page-tasks">
       <PageHeader title="My" light="Tasks" sub={`${assignedOpen.length} open task${assignedOpen.length !== 1 ? 's' : ''} assigned to you · ${pending.length} to-do${pending.length !== 1 ? 's' : ''} pending`}>
-        <button className="btn-solid" onClick={() => setModal({ kind: 'task', id: null })}>＋ Add To-do</button>
+        <button className="btn-solid" onClick={() => setModal({ kind: 'task', id: null })}><PlusIcon size={14} /> Add To-do</button>
       </PageHeader>
 
       <div className="card" style={{ marginBottom: 20 }}>
@@ -57,7 +58,7 @@ export default function TasksPage() {
         </div>
         {assignedShown.length === 0 ? (
           <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', padding: '8px 0' }}>
-            {showDone ? 'Nothing completed yet.' : 'No open tasks assigned to you 🎉'}
+            {showDone ? 'Nothing completed yet.' : 'No open tasks assigned to you <PartyPopperIcon size={13} />'}
           </div>
         ) : assignedShown.map(p => {
           const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
@@ -74,7 +75,7 @@ export default function TasksPage() {
               <AvStack ids={p.assignees.slice(0, 3)} />
               <Tag {...pr} />
               <Tag {...st} />
-              <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)', width: 64, textAlign: 'right' }}>{od ? '⚠ ' : ''}{fmtShort(p.due)}</div>
+              <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)', width: 64, textAlign: 'right' }}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtShort(p.due)}</div>
             </div>
           );
         })}
@@ -93,10 +94,10 @@ export default function TasksPage() {
       <div className="task-cards-grid">
         {shown.length === 0 && (
           <div className="task-empty-state">
-            <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
+            <div style={{ marginBottom: 8 }}><PartyPopperIcon size={32} /></div>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{emptyTitle}</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              {filter === 'pending' || filter === 'all' ? 'Use “＋ Add To-do” for personal reminders and checklists.' : 'Check back later.'}
+              {filter === 'pending' || filter === 'all' ? 'Use “Add To-do” for personal reminders and checklists.' : 'Check back later.'}
             </div>
           </div>
         )}
@@ -125,7 +126,7 @@ function TaskCard({ t, expanded, onToggle }: { t: Task; expanded: boolean; onTog
     <div className={`task-card${t.done ? ' tc-done' : ''}${od ? ' tc-overdue' : ''}`}>
       <div className="tc-top" onClick={onToggle}>
         <div className="tc-check-wrap">
-          <div className={`tc-chk ${t.done ? 'done' : 'pend'}`} onClick={e => { e.stopPropagation(); toggleTask(t.id); }}>{t.done ? '✓' : ''}</div>
+          <div className={`tc-chk ${t.done ? 'done' : 'pend'}`} onClick={e => { e.stopPropagation(); toggleTask(t.id); }}>{t.done && <CheckIcon size={12} />}</div>
         </div>
         <div className="tc-main">
           <div className={`tc-title${t.done ? ' done' : ''}`}>{t.title}</div>
@@ -135,13 +136,13 @@ function TaskCard({ t, expanded, onToggle }: { t: Task; expanded: boolean; onTog
                 {p.client} · {firstWords(p.title, 3)}
               </span>
             )}
-            {t.time && <span className="tc-time">🕐 {t.time}</span>}
-            <span className={`tc-due${od ? ' overdue' : ''}`}>{od ? '⚠ Overdue · ' : ''} {fmtShort(t.due)}</span>
+            {t.time && <span className="tc-time"><ClockIcon size={11} /> {t.time}</span>}
+            <span className={`tc-due${od ? ' overdue' : ''}`}>{od && <><TriangleAlertIcon size={11} /> Overdue · </>} {fmtShort(t.due)}</span>
           </div>
         </div>
         <div className="tc-badges">
           {t.isPrivate && (
-            <span className="tc-est" style={{ background: 'rgba(124,111,247,0.12)', color: '#7C6FF7', borderColor: 'rgba(124,111,247,0.2)' }}>🔒 Private</span>
+            <span className="tc-est" style={{ background: 'rgba(124,111,247,0.12)', color: '#7C6FF7', borderColor: 'rgba(124,111,247,0.2)' }}><LockIcon size={10} /> Private</span>
           )}
           <Tag {...pr} />
           {!!t.estHours && <span className="tc-est">{t.estHours}h est.</span>}
@@ -166,7 +167,7 @@ function TaskCard({ t, expanded, onToggle }: { t: Task; expanded: boolean; onTog
             </div>
             {subs.map(s => (
               <div key={s.id} className="tc-subtask-row">
-                <div className={`tc-sub-chk ${s.done ? 'done' : 'pend'}`} onClick={() => toggleSubtask(t.id, s.id)}>{s.done ? '✓' : ''}</div>
+                <div className={`tc-sub-chk ${s.done ? 'done' : 'pend'}`} onClick={() => toggleSubtask(t.id, s.id)}>{s.done && <CheckIcon size={10} />}</div>
                 <span className={`tc-sub-title${s.done ? ' done' : ''}`}>{s.title}</span>
               </div>
             ))}
@@ -177,17 +178,17 @@ function TaskCard({ t, expanded, onToggle }: { t: Task; expanded: boolean; onTog
                 value={newSub} onChange={e => setNewSub(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') submitSub(); }}
               />
-              <button className="btn-ghost" onClick={submitSub} style={{ fontSize: 11, padding: '4px 8px' }}>＋</button>
+              <button className="btn-ghost" onClick={submitSub} style={{ fontSize: 11, padding: '4px 8px' }}><PlusIcon size={12} /></button>
             </div>
           </div>
 
           <div className="tc-actions">
             {!t.done
-              ? <button className="tc-btn success" onClick={() => toggleTask(t.id)}>✓ Mark Complete</button>
-              : <button className="tc-btn default" onClick={() => toggleTask(t.id)}>↩ Reopen</button>}
-            {p && <button className="tc-btn default" onClick={() => openMatter(p.id)}>↗ Open Task</button>}
-            <button className="tc-btn default" onClick={() => setModal({ kind: 'task', id: t.id })}>✏ Edit</button>
-            <button className="tc-btn danger" onClick={() => deleteTask(t.id)}>🗑</button>
+              ? <button className="tc-btn success" onClick={() => toggleTask(t.id)}><CheckIcon size={13} /> Mark Complete</button>
+              : <button className="tc-btn default" onClick={() => toggleTask(t.id)}><RotateCcwIcon size={13} /> Reopen</button>}
+            {p && <button className="tc-btn default" onClick={() => openMatter(p.id)}><ArrowUpRightIcon size={13} /> Open Task</button>}
+            <button className="tc-btn default" onClick={() => setModal({ kind: 'task', id: t.id })}><PencilIcon size={13} /> Edit</button>
+            <button className="tc-btn danger" onClick={() => deleteTask(t.id)}><Trash2Icon size={13} /></button>
           </div>
         </div>
       )}

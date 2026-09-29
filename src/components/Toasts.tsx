@@ -1,6 +1,7 @@
 'use client';
 
 import { useStore } from './store';
+import { CheckIcon, RefreshCwIcon, TriangleAlertIcon } from 'lucide-react';
 
 export function Toasts() {
   const { toasts, sync } = useStore();
@@ -11,7 +12,7 @@ export function Toasts() {
           className={`sync-dot ${sync}`}
           title={sync === 'syncing' ? 'Saving…' : sync === 'error' ? 'Sync error — changes saved locally' : 'All changes saved'}
         >
-          {sync === 'syncing' ? '🔄' : sync === 'error' ? '⚠️' : '✅'}
+          {sync === 'syncing' ? <RefreshCwIcon size={16} /> : sync === 'error' ? <TriangleAlertIcon size={16} /> : <CheckIcon size={16} />}
         </div>
       )}
       <div className="toast-stack">
@@ -21,7 +22,7 @@ export function Toasts() {
             className="toast"
             style={t.leaving ? { opacity: 0, transform: 'translateX(16px)', transition: 'all 0.3s' } : undefined}
           >
-            <div className="toast-icon">{t.icon}</div>
+            <div className="toast-icon"><t.icon size={16} /></div>
             <div>
               <div className="toast-title">{t.title}</div>
               <div className="toast-msg">{t.msg}</div>

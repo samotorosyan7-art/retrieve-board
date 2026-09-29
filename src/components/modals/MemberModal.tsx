@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { Member } from '@/lib/types';
 import { useStore } from '../store';
 import { ModalFooter, ModalHeader } from './ModalHost';
+import { CircleCheckIcon, MailIcon, TriangleAlertIcon } from 'lucide-react';
 
 type Access = 'member' | 'assistant' | 'billing' | 'admin';
 
@@ -24,8 +25,8 @@ export function MemberModal({ id }: { id: string | null }) {
 
   async function submit() {
     const n = name.trim(), r = role.trim(), em = email.trim().toLowerCase();
-    if (!n || !r || !em) { toast('⚠️', 'Required', 'Name, role and email are required.'); return; }
-    if (team.some(x => x.email.toLowerCase() === em && x.id !== e?.id)) { toast('⚠️', 'Email in use', `${em} already belongs to another member.`); return; }
+    if (!n || !r || !em) { toast(TriangleAlertIcon, 'Required', 'Name, role and email are required.'); return; }
+    if (team.some(x => x.email.toLowerCase() === em && x.id !== e?.id)) { toast(TriangleAlertIcon, 'Email in use', `${em} already belongs to another member.`); return; }
     const member: Member = {
       id: e?.id ?? 'u' + Date.now(),
       name: n, role: r, email: em,
@@ -40,16 +41,16 @@ export function MemberModal({ id }: { id: string | null }) {
     const ok = await saveMember(member);
     setBusy(false);
     if (!ok) return;
-    if (e) toast('✅', 'Member updated', n);
-    else toast('✅', 'Member added', `Now invite ${em} from Supabase → Authentication → Users → Invite user.`);
+    if (e) toast(CircleCheckIcon, 'Member updated', n);
+    else toast(CircleCheckIcon, 'Member added', `Now invite ${em} from Supabase → Authentication → Users → Invite user.`);
     closeModal();
   }
 
   async function sendLink() {
     if (!e) return;
     const err = await sendPasswordEmail(e.email);
-    if (err) toast('⚠️', 'Email not sent', err);
-    else toast('📧', 'Email sent', `${e.name.split(' ')[0]} will receive a link to set a new password.`);
+    if (err) toast(TriangleAlertIcon, 'Email not sent', err);
+    else toast(MailIcon, 'Email sent', `${e.name.split(' ')[0]} will receive a link to set a new password.`);
   }
 
   return (
@@ -91,7 +92,7 @@ export function MemberModal({ id }: { id: string | null }) {
           <div>
             <label className="form-label">Password</label>
             {e ? (
-              <button type="button" className="btn-outline" style={{ width: '100%' }} onClick={sendLink}>📧 Send password email</button>
+              <button type="button" className="btn-outline" style={{ width: '100%' }} onClick={sendLink}><MailIcon size={14} /> Send password email</button>
             ) : (
               <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', lineHeight: 1.5, paddingTop: 6 }}>
                 After saving, invite this email from Supabase → Authentication so they can set a password.

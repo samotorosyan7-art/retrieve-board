@@ -4,14 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LOGO_SRC } from '@/lib/constants';
 import { useStore } from '@/components/store';
+import { ArrowRightIcon, ArrowUpRightIcon, CalendarIcon, CheckIcon, EyeIcon, EyeOffIcon, LockKeyholeIcon, MoonIcon, ReceiptIcon, ShieldCheckIcon, SquareKanbanIcon, SunIcon, TimerIcon, UsersIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
-const FEATURES: [string, string][] = [
-  ['⊞', 'Kanban + list view for all active tasks'],
-  ['👥', 'Live team workload & utilisation tracking'],
-  ['⏱', 'Time logging with one-click entry on any task'],
-  ['₾', 'Monthly billing reports with RA VAT — send direct to client'],
-  ['📅', 'Deadline calendar view across all tasks'],
-  ['🔒', 'Role-based access — billing admin-only'],
+const FEATURES: [LucideIcon, string][] = [
+  [SquareKanbanIcon, 'Kanban + list view for all active tasks'],
+  [UsersIcon, 'Live team workload & utilisation tracking'],
+  [TimerIcon, 'Time logging with one-click entry on any task'],
+  [ReceiptIcon, 'Monthly billing reports with RA VAT — send direct to client'],
+  [CalendarIcon, 'Deadline calendar view across all tasks'],
+  [ShieldCheckIcon, 'Role-based access — billing admin-only'],
 ];
 
 export default function LandingPage() {
@@ -64,8 +66,8 @@ export default function LandingPage() {
           <img className="land-logo-img" src={LOGO_SRC} alt="Retrieve Legal & Tax" />
         </div>
         <div className="land-nav-right">
-          <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme">{isDark ? '🌙' : '☀️'}</button>
-          <a href="https://retrieve.am" target="_blank" rel="noreferrer" className="btn-ghost">↗ retrieve.am</a>
+          <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme">{isDark ? <MoonIcon size={16} /> : <SunIcon size={16} />}</button>
+          <a href="https://retrieve.am" target="_blank" rel="noreferrer" className="btn-ghost"><ArrowUpRightIcon size={14} /> retrieve.am</a>
         </div>
       </nav>
 
@@ -84,18 +86,18 @@ export default function LandingPage() {
             One place for every matter, every deadline, every invoice. Built around how Retrieve Legal &amp; Tax actually works.
           </p>
           <div className="land-features">
-            {FEATURES.map(([icon, text]) => (
+            {FEATURES.map(([Icon, text]) => (
               <div className="land-feat" key={text}>
-                <div className="land-feat-icon">{icon}</div>
+                <div className="land-feat-icon"><Icon size={16} /></div>
                 <div className="land-feat-text">{text}</div>
-                <div className="land-feat-check">✓</div>
+                <div className="land-feat-check"><CheckIcon size={14} /></div>
               </div>
             ))}
           </div>
         </div>
 
         <div className="login-card">
-          <div className="lc-eyebrow"><span className="lc-lock">🔐</span> Secure Sign-in</div>
+          <div className="lc-eyebrow"><span className="lc-lock"><LockKeyholeIcon size={12} /></span> Secure Sign-in</div>
           <div className="lc-title">Welcome back</div>
           <div className="lc-sub">Retrieve Legal &amp; Tax · Internal Platform</div>
 
@@ -126,12 +128,12 @@ export default function LandingPage() {
               onKeyDown={e => { if (e.key === 'Enter') attemptLogin(); }}
             />
             <button className="lc-eye" type="button" onClick={() => setShowPass(s => !s)} title="Show/hide password">
-              {showPass ? '🙈' : '👁'}
+              {showPass ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
             </button>
           </div>
 
           <button className="btn-primary" disabled={busy || authStatus === 'loading'} onClick={attemptLogin}>
-            {busy ? 'Please wait…' : 'Sign In →'}
+            {busy ? 'Please wait…' : <>Sign In <ArrowRightIcon size={14} /></>}
           </button>
           <div style={{ textAlign: 'right', marginTop: 10 }}>
             <a href="#" onClick={e => { e.preventDefault(); forgotPassword(); }} style={{ fontSize: 12, color: 'var(--text-secondary)', textDecoration: 'underline' }}>

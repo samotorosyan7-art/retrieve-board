@@ -5,6 +5,7 @@ import { AREAS, MATTER_TYPES, PRIORITIES, STATUSES } from '@/lib/constants';
 import { canSeeMatter, firstWords } from '@/lib/helpers';
 import type { Project } from '@/lib/types';
 import { useStore } from './store';
+import { XIcon } from 'lucide-react';
 
 type Filters = { client: string; type: string; emp: string; area: string; pri: string; stat: string; sort: string };
 const EMPTY: Filters = { client: '', type: '', emp: '', area: '', pri: '', stat: '', sort: '' };
@@ -12,10 +13,17 @@ const EMPTY: Filters = { client: '', type: '', emp: '', area: '', pri: '', stat:
 const byDate = (key: 'due' | 'created', dir: 1 | -1, fallback: string) =>
   (a: Project, b: Project) => dir * (new Date(a[key] || fallback).getTime() - new Date(b[key] || fallback).getTime());
 
+/** Filters seeded from the URL, e.g. /list?emp=<id> (Team Workload's "View all tasks"). The app only renders client-side. */
+const fromUrl = (): Filters => {
+  if (typeof window === 'undefined') return EMPTY;
+  const q = new URLSearchParams(window.location.search);
+  return { ...EMPTY, emp: q.get('emp') || '' };
+};
+
 /** Filter state + the visible, filtered, sorted matter list (Kanban and List pages). All filters combine (AND). */
 export function useMatterFilters() {
   const { projects, currentUser, search } = useStore();
-  const [f, setF] = useState<Filters>(EMPTY);
+  const [f, setF] = useState<Filters>(fromUrl);
   const q = search.toLowerCase();
 
   let list = projects.filter(p => {
@@ -86,7 +94,7 @@ export function MatterFilterRow({
         <option value="client-asc">Client A → Z</option>
         <option value="client-desc">Client Z → A</option>
       </select>
-      <button className="btn-ghost" onClick={clear} style={{ fontSize: 12, padding: '6px 12px' }}>✕ Clear</button>
+      <button className="btn-ghost" onClick={clear} style={{ fontSize: 12, padding: '6px 12px' }}><XIcon size={12} /> Clear</button>
     </div>
   );
 }

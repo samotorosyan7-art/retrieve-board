@@ -6,6 +6,7 @@ import { LogTimeModal } from './LogTimeModal';
 import { MatterModal } from './MatterModal';
 import { MemberModal } from './MemberModal';
 import { TaskModal } from './TaskModal';
+import { XIcon } from 'lucide-react';
 
 export function ModalHost() {
   const { modal, closeModal } = useStore();
@@ -27,7 +28,7 @@ export function ModalHeader({ title, sub }: { title: string; sub: string }) {
   return (
     <div className="modal-hdr">
       <div><div className="modal-title">{title}</div><div className="modal-sub">{sub}</div></div>
-      <button className="dp-close" onClick={closeModal}>✕</button>
+      <button className="dp-close" onClick={closeModal}><XIcon size={14} /></button>
     </div>
   );
 }

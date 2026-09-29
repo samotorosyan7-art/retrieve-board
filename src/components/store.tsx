@@ -5,11 +5,14 @@ import { DEFAULT_FX } from '@/lib/constants';
 import {
   loadAll, loadMessages, rowToActivity, rowToClient, rowToMember, rowToMessage, rowToProject, rowToTask, write, type Mutation,
 } from '@/lib/db';
-import { stat, today } from '@/lib/helpers';
+import { sendMatterAssignmentEmail } from '@/lib/email';
+import { canDeleteMatter, stat, today } from '@/lib/helpers';
 import { getSupabase } from '@/lib/supabase';
 import type {
   Activity, ChatMessage, Client, Currency, Member, Project, StatusId, SyncState, Task, TimeLog,
 } from '@/lib/types';
+import { ArchiveIcon, CircleCheckIcon, GlobeIcon, LockIcon, MailIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 /* ── localStorage: theme (always) + a per-user data cache for instant paint, wiped on sign-out ── */
 const THEME_KEY = 'retrieve_theme';
@@ -37,7 +40,7 @@ export type ModalState =
 
 export type ConfirmState = { title: string; msg: string; confirmLabel?: string; onConfirm: () => void };
 
-type Toast = { id: number; icon: string; title: string; msg: string; leaving: boolean };
+type Toast = { id: number; icon: LucideIcon; title: string; msg: string; leaving: boolean };
 
 function useStoreValue() {
   const [sessionEmail, setSessionEmail] = useState<string | null | undefined>(undefined); // undefined = not checked yet
@@ -69,13 +72,13 @@ function useStoreValue() {
   const hydrated = authStatus !== 'loading';
 
   // Refs so async callbacks (realtime, debounces) always see fresh state.
-  const state = useRef({ projects, tasks, clients, currentUser });
-  state.current = { projects, tasks, clients, currentUser };
+  const state = useRef({ projects, tasks, clients, currentUser, team });
+  state.current = { projects, tasks, clients, currentUser, team };
   const chatVisible = useRef(false);
 
   /* ── Toasts ── */
   const toastSeq = useRef(0);
-  const toast = useCallback((icon: string, title: string, msg = '') => {
+  const toast = useCallback((icon: LucideIcon, title: string, msg = '') => {
     const id = ++toastSeq.current;
     setToasts(ts => [...ts, { id, icon, title, msg, leaving: false }]);
     setTimeout(() => {
@@ -106,6 +109,7 @@ function useStoreValue() {
   };
   // Our own activity rows, so their realtime echo isn't added a second time.
   const ownActivity = useRef<string[]>([]);
+  const reloadRef = useRef<() => void>(() => {});
 
   const persist = useCallback(async (m: Mutation) => {
     const key = mutationKey(m);
@@ -119,9 +123,14 @@ function useStoreValue() {
     } catch (e) {
       console.warn('Save error', e);
       setSync('error');
-      if (m.type === 'member' || m.type === 'member_delete') toast('⚠️', 'Not saved', 'Only admins can change the team.');
-      else if (m.type.endsWith('_delete')) toast('⚠️', 'Delete failed', 'The database did not remove it — it has been restored.');
-      else toast('⚠️', 'Sync issue', 'Changes saved locally. Will retry on next action.');
+      const denied = (e as { code?: string })?.code === '42501';
+      if (m.type === 'project' && denied) {
+        // Rejected by a permission rule (migration 003) — show why and restore the saved copy.
+        toast(TriangleAlertIcon, 'Not allowed', (e as { message?: string }).message || 'You do not have permission to make that change.');
+        reloadRef.current();
+      } else if (m.type === 'member' || m.type === 'member_delete') toast(TriangleAlertIcon, 'Not saved', 'Only admins can change the team.');
+      else if (m.type.endsWith('_delete')) toast(TriangleAlertIcon, 'Delete failed', 'The database did not remove it — it has been restored.');
+      else toast(TriangleAlertIcon, 'Sync issue', 'Changes saved locally. Will retry on next action.');
       return false;
     } finally {
       clearTimeout(slow);
@@ -153,6 +162,7 @@ function useStoreValue() {
       setTeamLoaded(true);
     }
   }, []);
+  reloadRef.current = reload;
 
   // Mount: theme, then follow the Supabase Auth session.
   useEffect(() => {
@@ -312,13 +322,22 @@ function useStoreValue() {
   /* ── Projects ── */
   const saveProject = (p: Project) => {
     setProjects(ps => (ps.some(x => x.id === p.id) ? ps.map(x => (x.id === p.id ? p : x)) : [...ps, p]));
-    persist({ type: 'project', entity: p });
+    return persist({ type: 'project', entity: p });
+  };
+  /** Email people newly put on a task — only after the row is saved, since the server reads it back. */
+  const notifyAssigned = (saved: Promise<boolean>, pid: string, ids: string[]) => {
+    const others = ids.filter(id => id !== me());
+    if (!others.length) return;
+    saved.then(ok => ok && sendMatterAssignmentEmail(pid, others)).then(n => {
+      if (n) toast(MailIcon, 'Assignees notified', `Email sent to ${n} ${n === 1 ? 'person' : 'people'}.`);
+    });
   };
   const patchProject = (id: string, patch: Partial<Project>) => {
     const p = state.current.projects.find(x => x.id === id);
     if (!p) return null;
     const next = { ...p, ...patch };
-    saveProject(next);
+    const saved = saveProject(next);
+    if (patch.assignees) notifyAssigned(saved, id, patch.assignees.filter(a => !p.assignees.includes(a)));
     return next;
   };
   const setStatus = (id: string, status: StatusId) => {
@@ -345,12 +364,12 @@ function useStoreValue() {
     const p = state.current.projects.find(x => x.id === id);
     if (!p) return;
     if (p.createdBy && p.createdBy !== state.current.currentUser?.id) {
-      toast('🔒', 'Cannot change', 'Only the person who created this task can change its visibility.');
+      toast(LockIcon, 'Cannot change', 'Only the person who created this task can change its visibility.');
       return;
     }
     const priv = !p.isPrivate;
     patchProject(id, { isPrivate: priv });
-    toast(priv ? '🔒' : '🌐', priv ? 'Task is now private' : 'Task is now public',
+    toast(priv ? LockIcon : GlobeIcon, priv ? 'Task is now private' : 'Task is now public',
       priv ? 'Only you can see this task.' : 'Visible to the whole team.');
   };
   const addTimeLog = (pid: string, log: TimeLog) => {
@@ -358,13 +377,25 @@ function useStoreValue() {
     if (!p) return null;
     return patchProject(pid, { timeLogs: [...p.timeLogs, log] });
   };
+  const setAssignees = (id: string, assignees: string[]) => {
+    const user = state.current.currentUser;
+    if (!user?.isAdmin) { toast(LockIcon, 'Admins only', 'Only admins can reassign a task.'); return; }
+    const p = patchProject(id, { assignees });
+    if (!p) return;
+    const names = assignees.map(a => state.current.team.find(e => e.id === a)?.name.split(' ')[0]).filter(Boolean).join(', ');
+    addActivity(user.id, `assigned <b>${p.title}</b> to ${names || 'nobody'}`);
+  };
   const archiveProject = (id: string) => {
     setStatus(id, 'archive');
-    toast('🗄', 'Task archived', 'Moved to Archive.');
+    toast(ArchiveIcon, 'Task archived', 'Moved to Archive.');
   };
   const deleteProject = (id: string) => {
     const p = state.current.projects.find(x => x.id === id);
     if (!p) return;
+    if (!canDeleteMatter(p, state.current.currentUser)) {
+      toast(LockIcon, 'Cannot delete', 'Only admins and the person who created this task can delete it.');
+      return;
+    }
     setConfirmState({
       title: 'Delete task?',
       msg: `"${p.title}" and its time log will be permanently removed. To-dos linked to it are kept. This cannot be undone.`,
@@ -374,7 +405,7 @@ function useStoreValue() {
         setSelectedPid(cur => (cur === id ? null : cur));
         if (await persist({ type: 'project_delete', id })) {
           addActivity(me(), `deleted task <b>${p.title}</b>`);
-          toast('🗑️', 'Task deleted', p.title);
+          toast(Trash2Icon, 'Task deleted', p.title);
         } else reload();
       },
     });
@@ -383,7 +414,7 @@ function useStoreValue() {
     const p: Project = {
       ...data, id: 'p' + Date.now(), progress: 0, created: today(), timeLogs: [], files: [], createdBy: me(),
     };
-    saveProject(p);
+    notifyAssigned(saveProject(p), p.id, p.assignees);
     addActivity(me(), `created task <b>${p.title}</b>`);
     return p;
   };
@@ -397,7 +428,7 @@ function useStoreValue() {
     const t = state.current.tasks.find(x => x.id === id);
     if (!t) return;
     saveTask({ ...t, done: !t.done });
-    toast('✅', 'To-do updated', !t.done ? 'Marked complete.' : 'Moved back to pending.');
+    toast(CircleCheckIcon, 'To-do updated', !t.done ? 'Marked complete.' : 'Moved back to pending.');
   };
   const toggleSubtask = (tid: string, sid: string) => {
     const t = state.current.tasks.find(x => x.id === tid);
@@ -418,7 +449,7 @@ function useStoreValue() {
       confirmLabel: 'Delete to-do',
       onConfirm: async () => {
         setTasks(ts => ts.filter(x => x.id !== id));
-        if (await persist({ type: 'task_delete', id })) toast('🗑', 'To-do deleted', t.title);
+        if (await persist({ type: 'task_delete', id })) toast(Trash2Icon, 'To-do deleted', t.title);
         else reload();
       },
     });
@@ -442,7 +473,7 @@ function useStoreValue() {
       onConfirm: async () => {
         setClients(cs => cs.filter(x => x.id !== id));
         onDeleted?.();
-        if (await persist({ type: 'client_delete', id })) toast('🗑️', 'Client removed', `${c.name} deleted.`);
+        if (await persist({ type: 'client_delete', id })) toast(Trash2Icon, 'Client removed', `${c.name} deleted.`);
         else reload();
       },
     });
@@ -459,14 +490,14 @@ function useStoreValue() {
   const deleteMember = (id: string) => {
     const e = team.find(x => x.id === id);
     if (!e) return;
-    if (e.isAdmin) { toast('⚠️', 'Cannot delete', 'Cannot remove the firm admin.'); return; }
+    if (e.isAdmin) { toast(TriangleAlertIcon, 'Cannot delete', 'Cannot remove the firm admin.'); return; }
     setConfirmState({
       title: 'Remove team member?',
       msg: `Remove ${e.name} from the team? They will lose access immediately. Their tasks and time logs remain.`,
       confirmLabel: 'Remove',
       onConfirm: async () => {
         setTeam(ts => ts.filter(x => x.id !== id));
-        if (await persist({ type: 'member_delete', id })) toast('🗑️', 'Member removed', e.name);
+        if (await persist({ type: 'member_delete', id })) toast(Trash2Icon, 'Member removed', e.name);
         else reload();
       },
     });
@@ -496,7 +527,7 @@ function useStoreValue() {
   const openPanel = (id: string) => setSelectedPid(cur => (cur === id ? null : id));
   const clearSavedState = () => {
     localStorage.removeItem(CACHE_KEY);
-    toast('🗑️', 'Cache cleared', 'Reloading from the database…');
+    toast(Trash2Icon, 'Cache cleared', 'Reloading from the database…');
     reload();
   };
 
@@ -507,7 +538,7 @@ function useStoreValue() {
     toggleTheme: () => setIsDark(d => !d),
     toast, login, logout, sendPasswordEmail, emp, openPanel, closePanel: () => setSelectedPid(null),
     closeModal: () => setModal(null),
-    addActivity, saveProject, patchProject, setStatus, setProgress, togglePrivacy, addTimeLog, createProject, archiveProject, deleteProject,
+    addActivity, saveProject, patchProject, setStatus, setProgress, togglePrivacy, addTimeLog, setAssignees, createProject, archiveProject, deleteProject,
     saveTask, toggleTask, toggleSubtask, addSubtask, deleteTask,
     saveClient, deleteClient, saveMember, deleteMember,
     loadRoom, sendMessage, setChatVisible, clearSavedState,

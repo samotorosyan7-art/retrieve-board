@@ -3,30 +3,37 @@
 import { useState } from 'react';
 import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
-import { PageHeader, Tag } from '@/components/ui';
+import { AvStack, PageHeader, Tag } from '@/components/ui';
 import { clientColor, clientInitials, firstWords, fmtDate, fmtShort, isOpen, pri, stat } from '@/lib/helpers';
 import type { Client } from '@/lib/types';
+import { Building2Icon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 
 export default function ClientsPage() {
   const { clients, projects, setModal } = useStore();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const q = search.toLowerCase();
   const filtered = clients.filter(c => {
     if (q && !c.name.toLowerCase().includes(q) && !c.contact.toLowerCase().includes(q)) return false;
     if (typeFilter && c.type !== typeFilter) return false;
+    if (statusFilter !== 'all' && c.active !== (statusFilter === 'active')) return false;
     return true;
   });
-  const sel = clients.find(c => c.id === selectedId) ?? clients[0];
+  const sel = clients.find(c => c.id === selectedId) ?? filtered[0];
+  const nActive = clients.filter(c => c.active).length;
+  const statusTabs: [typeof statusFilter, string, number][] = [
+    ['all', 'All', clients.length], ['active', 'Active', nActive], ['inactive', 'Inactive', clients.length - nActive],
+  ];
   const types = [...new Set(clients.map(c => c.type))].sort();
   const addClient = () => setModal({ kind: 'client', id: null, onSaved: setSelectedId });
 
   return (
     <div className="page active" id="page-clients">
-      <PageHeader title="Clients" light="& Contacts" sub={`${clients.length} client${clients.length !== 1 ? 's' : ''} · ${clients.filter(c => c.active).length} active`}>
-        <button className="btn-solid" onClick={addClient}>＋ Add Client</button>
+      <PageHeader title="Clients" light="& Contacts" sub={`${clients.length} client${clients.length !== 1 ? 's' : ''} · ${nActive} active · ${clients.length - nActive} inactive`}>
+        <button className="btn-solid" onClick={addClient}><PlusIcon size={14} /> Add Client</button>
       </PageHeader>
 
       <div className="clients-layout">
@@ -38,6 +45,15 @@ export default function ClientsPage() {
           </div>
           <div className="clp-search">
             <input placeholder="Search clients…" value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <div className="clp-filter">
+            <div className="seg-ctrl" style={{ width: '100%' }}>
+              {statusTabs.map(([id, label, n]) => (
+                <button key={id} className={`seg-btn${statusFilter === id ? ' active' : ''}`} onClick={() => setStatusFilter(id)} style={{ flex: 1, fontSize: 11, padding: '4px 10px' }}>
+                  {label} <span style={{ opacity: 0.65 }}>({n})</span>
+                </button>
+              ))}
+            </div>
           </div>
           <div className="clp-filter">
             {['', ...types].map(t => (
@@ -74,10 +90,10 @@ export default function ClientsPage() {
           ) : (
             <div className="client-detail-card">
               <div className="empty-clients">
-                <div className="ec-icon">🏢</div>
+                <div className="ec-icon"><Building2Icon size={36} /></div>
                 <div className="ec-txt">Select a client</div>
                 <div className="ec-sub">Choose a client from the list, or add your first one.</div>
-                <button className="btn-solid" style={{ marginTop: 16 }} onClick={addClient}>＋ Add First Client</button>
+                <button className="btn-solid" style={{ marginTop: 16 }} onClick={addClient}><PlusIcon size={14} /> Add First Client</button>
               </div>
             </div>
           )}
@@ -88,7 +104,7 @@ export default function ClientsPage() {
 }
 
 function ClientDetail({ c, onDeleted }: { c: Client; onDeleted: () => void }) {
-  const { projects, emp, setModal, deleteClient } = useStore();
+  const { projects, setModal, deleteClient } = useStore();
   const { openMatter } = useNav();
   const [areaFilter, setAreaFilter] = useState('all');
 
@@ -130,9 +146,9 @@ function ClientDetail({ c, onDeleted }: { c: Client; onDeleted: () => void }) {
             </div>
           </div>
           <div className="cdc-actions">
-            <button className="btn-solid" onClick={() => setModal({ kind: 'matter', client: c.name })}>＋ New Task</button>
-            <button className="btn-outline" onClick={() => setModal({ kind: 'client', id: c.id })}>✏ Edit</button>
-            <button className="btn-outline" style={{ color: 'var(--p-high)' }} onClick={() => deleteClient(c.id, onDeleted)} title="Delete client">🗑</button>
+            <button className="btn-solid" onClick={() => setModal({ kind: 'matter', client: c.name })}><PlusIcon size={14} /> New Task</button>
+            <button className="btn-outline" onClick={() => setModal({ kind: 'client', id: c.id })}><PencilIcon size={14} /> Edit</button>
+            <button className="btn-outline" style={{ color: 'var(--p-high)' }} onClick={() => deleteClient(c.id, onDeleted)} title="Delete client"><Trash2Icon size={14} /></button>
           </div>
         </div>
         <div className="cdc-stats">
@@ -187,15 +203,15 @@ function ClientDetail({ c, onDeleted }: { c: Client; onDeleted: () => void }) {
               {shown.map(p => {
                 const st = stat(p.status), pr = pri(p.priority);
                 const hrs = (p.timeLogs || []).reduce((sum, l) => sum + l.hours, 0);
-                const people = p.assignees.map(id => emp(id)?.name.split(' ')[0]).filter(Boolean).join(', ');
                 return (
                   <div key={p.id} className="client-matter-row" style={{ borderLeft: `3px solid ${st.col}` }} onClick={() => openMatter(p.id)}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="cmr-title" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title}</div>
                       <div className="cmr-area" style={{ marginTop: 2 }}>
-                        {[p.matterType, firstWords(p.area, 3), people, hrs > 0 ? `${hrs}h` : ''].filter(Boolean).join(' · ')}
+                        {[p.matterType, firstWords(p.area, 3), hrs > 0 ? `${hrs}h` : ''].filter(Boolean).join(' · ')}
                       </div>
                     </div>
+                    {p.assignees.length > 0 && <AvStack ids={p.assignees} size={22} />}
                     <Tag {...pr} />
                     <Tag {...st} />
                     <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', width: 52, textAlign: 'right' }}>{fmtShort(p.due)}</div>

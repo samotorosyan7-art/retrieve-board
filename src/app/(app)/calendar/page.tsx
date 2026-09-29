@@ -5,6 +5,7 @@ import { useStore } from '@/components/store';
 import { AvStack, PageHeader, Tag, cardTitle, muted } from '@/components/ui';
 import { canSeeMatter, firstWords, fmtDate, isOD, pri, stat, isOpen } from '@/lib/helpers';
 import type { Project, Task } from '@/lib/types';
+import { ChevronLeftIcon, ChevronRightIcon, ClipboardListIcon, TriangleAlertIcon } from 'lucide-react';
 
 type Item = { type: 'matter'; data: Project } | { type: 'task'; data: Task };
 
@@ -40,9 +41,9 @@ export default function CalendarPage() {
   return (
     <div className="page active" id="page-calendar">
       <PageHeader title="Task" light="Calendar" sub={`Deadlines & to-dos for ${monthName}`}>
-        <button className="btn-ghost" onClick={() => shift(-1)} style={{ padding: '6px 12px' }}>← Prev</button>
+        <button className="btn-ghost" onClick={() => shift(-1)} style={{ padding: '6px 12px' }}><ChevronLeftIcon size={14} /> Prev</button>
         <button className="btn-ghost" onClick={() => setMonth({ m: now.getMonth(), y: now.getFullYear() })} style={{ padding: '6px 12px' }}>Today</button>
-        <button className="btn-ghost" onClick={() => shift(1)} style={{ padding: '6px 12px' }}>Next →</button>
+        <button className="btn-ghost" onClick={() => shift(1)} style={{ padding: '6px 12px' }}>Next <ChevronRightIcon size={14} /></button>
       </PageHeader>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
@@ -66,7 +67,7 @@ export default function CalendarPage() {
                     const p = item.data, st = stat(p.status);
                     return (
                       <div key={p.id} className="cal-event" style={{ background: st.bg, color: st.col }} onClick={() => openPanel(p.id)} title={p.title}>
-                        <span className="cal-ev-time">📋</span>{p.client.split(' ')[0]}
+                        <span className="cal-ev-time"><ClipboardListIcon size={10} /></span>{p.client.split(' ')[0]}
                       </div>
                     );
                   }
@@ -95,7 +96,7 @@ export default function CalendarPage() {
                 <div style={{ flex: 1, minWidth: 0 }}><div className="urgent-title">{p.title}</div><div className="urgent-client">{p.client}</div></div>
                 <AvStack ids={p.assignees.slice(0, 2)} />
                 <Tag {...pr} />
-                <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{od ? '⚠ ' : ''}{fmtDate(p.due)}</div>
+                <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtDate(p.due)}</div>
               </div>
             );
           }) : <div style={muted}>No deadlines this month.</div>}

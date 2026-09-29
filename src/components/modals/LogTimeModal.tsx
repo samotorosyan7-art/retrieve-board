@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { today, isOpen } from '@/lib/helpers';
 import { useStore } from '../store';
 import { ModalFooter, ModalHeader } from './ModalHost';
+import { TimerIcon, TriangleAlertIcon } from 'lucide-react';
 
 export function LogTimeModal() {
   const { projects, team, currentUser, addTimeLog, toast, closeModal } = useStore();
@@ -19,10 +20,10 @@ export function LogTimeModal() {
   function submit() {
     const h = parseFloat(hours || '0');
     const who = isAdmin ? whoSel : currentUser?.id || '';
-    if (!pid || !who || !desc.trim() || !h) { toast('⚠️', 'Missing info', 'Fill in all fields.'); return; }
+    if (!pid || !who || !desc.trim() || !h) { toast(TriangleAlertIcon, 'Missing info', 'Fill in all fields.'); return; }
     const p = addTimeLog(pid, { who, hours: h, desc: desc.trim(), date, month: new Date(date).getMonth() + 1 });
     closeModal();
-    toast('⏱', 'Time logged', `${h}h on "${p?.title}"`);
+    toast(TimerIcon, 'Time logged', `${h}h on "${p?.title}"`);
   }
 
   return (

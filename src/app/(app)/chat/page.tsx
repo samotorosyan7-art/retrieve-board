@@ -5,6 +5,7 @@ import { useStore } from '@/components/store';
 import { PageHeader, Photo } from '@/components/ui';
 import { CHAT_ROOMS } from '@/lib/constants';
 import { dmRoom } from '@/lib/helpers';
+import { MessagesSquareIcon, SendHorizontalIcon } from 'lucide-react';
 
 export default function ChatPage() {
   const { team, currentUser, chatMessages, loadRoom, sendMessage, setChatVisible } = useStore();
@@ -34,6 +35,7 @@ export default function ChatPage() {
   }, [msgs.length, room]);
 
   const channel = rooms.find(r => r.id === room);
+  const ChannelIcon = channel?.icon ?? MessagesSquareIcon;
   let roomName = channel ? `# ${channel.name}` : '';
   let roomDesc = channel?.desc || '';
   if (room.startsWith('dm_')) {
@@ -60,7 +62,7 @@ export default function ChatPage() {
           <div className="chat-room-list">
             {rooms.map(r => (
               <div key={r.id} className={`chat-room-row${room === r.id ? ' active' : ''}`} onClick={() => setRoom(r.id)}>
-                <span className="chat-room-icon">{r.icon}</span>
+                <span className="chat-room-icon"><r.icon size={14} /></span>
                 <div className="chat-room-name"># {r.name}</div>
               </div>
             ))}
@@ -78,16 +80,16 @@ export default function ChatPage() {
 
         <div className="chat-main">
           {!loaded[room] && !chatMessages[room] ? (
-            <div className="chat-empty"><span style={{ fontSize: 28 }}>💬</span>Loading messages…</div>
+            <div className="chat-empty"><MessagesSquareIcon size={28} />Loading messages…</div>
           ) : (
             <>
               <div className="chat-hdr">
-                <div style={{ fontSize: 18 }}>{channel?.icon || '💬'}</div>
+                <ChannelIcon size={18} />
                 <div><div className="chat-hdr-name">{roomName}</div><div className="chat-hdr-sub">{roomDesc}</div></div>
               </div>
               <div className="chat-messages" ref={listRef}>
                 {msgs.length === 0 ? (
-                  <div className="chat-empty"><span style={{ fontSize: 28 }}>{channel?.icon || '💬'}</span><span>No messages yet — say hello!</span></div>
+                  <div className="chat-empty"><ChannelIcon size={28} /><span>No messages yet — say hello!</span></div>
                 ) : msgs.map(m => {
                   const e = team.find(x => x.id === m.who);
                   const isOwn = m.who === currentUser?.id;
@@ -127,7 +129,7 @@ export default function ChatPage() {
                   }}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
                 />
-                <button className="chat-send-btn" onClick={send}>↑</button>
+                <button className="chat-send-btn" onClick={send}><SendHorizontalIcon size={16} /></button>
               </div>
             </>
           )}

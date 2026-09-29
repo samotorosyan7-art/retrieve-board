@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/ui';
 import { LOGO_SRC } from '@/lib/constants';
 import { fmtBill } from '@/lib/helpers';
 import type { Currency } from '@/lib/types';
+import { CopyIcon, FileTextIcon, LockIcon, MailIcon, PencilIcon, PrinterIcon, Share2Icon, TriangleAlertIcon } from 'lucide-react';
 
 const MONTHS = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const VAT = 0.2;
@@ -23,7 +24,7 @@ export default function BillingPage() {
 
   useEffect(() => {
     if (!allowed) {
-      toast('🔒', 'Access denied', 'Billing is restricted to Managing Partner and Senior Partner.');
+      toast(LockIcon, 'Access denied', 'Billing is restricted to Managing Partner and Senior Partner.');
       router.replace('/dashboard');
     }
   }, [allowed, router, toast]);
@@ -112,7 +113,7 @@ function Invoice({ client, entries, month, onTotal }: { client: string; entries:
 
   function printInvoice() {
     const el = ref.current;
-    if (!el) { toast('⚠️', 'No invoice', 'Select a client first.'); return; }
+    if (!el) { toast(TriangleAlertIcon, 'No invoice', 'Select a client first.'); return; }
     const clone = el.cloneNode(true) as HTMLElement;
     clone.querySelectorAll('.inv-actions, .inv-hint').forEach(n => n.remove());
     const live = el.querySelectorAll('input');
@@ -130,13 +131,13 @@ function Invoice({ client, entries, month, onTotal }: { client: string; entries:
 <style>${PRINT_CSS}</style></head><body>${clone.outerHTML}</body></html>`);
     w.document.close();
     setTimeout(() => { w.focus(); w.print(); }, 600);
-    toast('🖨️', 'Print dialog opened', 'Use "Save as PDF" in the print dialog.');
+    toast(PrinterIcon, 'Print dialog opened', 'Use "Save as PDF" in the print dialog.');
   }
 
   return (
     <div className="inv-wrap" ref={ref}>
       <div className="inv-hint" style={{ background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: 'var(--r-lg)', padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 16 }}>✏️</span>
+        <PencilIcon size={16} />
         <div>
           <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>Enter hourly rates to calculate invoice</div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1 }}>Type each attorney&apos;s rate in the Rate column — totals update instantly. Export PDF when ready.</div>
@@ -195,9 +196,9 @@ function Invoice({ client, entries, month, onTotal }: { client: string; entries:
         </div>
       </div>
       <div className="inv-actions">
-        <button className="btn-solid" onClick={() => toast('📧', 'Invoice sent', `Billing report emailed to ${client}.`)}>📧 Send to Client</button>
-        <button className="btn-outline" onClick={printInvoice}>📄 Export PDF</button>
-        <button className="btn-outline" onClick={() => toast('📋', 'Copied', 'Invoice link copied.')}>🔗 Share</button>
+        <button className="btn-solid" onClick={() => toast(MailIcon, 'Invoice sent', `Billing report emailed to ${client}.`)}><MailIcon size={14} /> Send to Client</button>
+        <button className="btn-outline" onClick={printInvoice}><FileTextIcon size={14} /> Export PDF</button>
+        <button className="btn-outline" onClick={() => toast(CopyIcon, 'Copied', 'Invoice link copied.')}><Share2Icon size={14} /> Share</button>
       </div>
       <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 12, lineHeight: 1.7 }}>
         Payment terms: Net 30 days. Bank transfer via Ameriabank or ARCA. Questions: billing@retrieve.am

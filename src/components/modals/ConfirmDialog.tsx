@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useStore } from '../store';
+import { XIcon } from 'lucide-react';
 
 /** In-app replacement for window.confirm(), which embedded/preview browsers often block silently. */
 export function ConfirmDialog() {
@@ -22,7 +23,7 @@ export function ConfirmDialog() {
           <>
             <div className="modal-hdr">
               <div><div className="modal-title">{c.title}</div></div>
-              <button className="dp-close" onClick={close}>✕</button>
+              <button className="dp-close" onClick={close}><XIcon size={14} /></button>
             </div>
             <div className="modal-body">
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{c.msg}</div>

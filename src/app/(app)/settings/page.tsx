@@ -4,13 +4,15 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/components/store';
 import { PageHeader, Photo } from '@/components/ui';
+import { BanknoteIcon, BellIcon, CalendarIcon, FileSignatureIcon, HardDriveIcon, LandmarkIcon, LinkIcon, LockIcon, MailIcon, PencilIcon, PlugIcon, PlusIcon, SaveIcon, SendIcon, SheetIcon, Trash2Icon, UsersIcon, EuroIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 const PANELS = [
-  { id: 'users', icon: '👥', label: 'Team & Access' },
-  { id: 'notif', icon: '🔔', label: 'Notifications' },
-  { id: 'integrations', icon: '🔗', label: 'Integrations' },
-  { id: 'billing-cfg', icon: '₾', label: 'Billing Config' },
-  { id: 'firm', icon: '🏛', label: 'Firm Profile' },
+  { id: 'users', icon: UsersIcon, label: 'Team & Access' },
+  { id: 'notif', icon: BellIcon, label: 'Notifications' },
+  { id: 'integrations', icon: PlugIcon, label: 'Integrations' },
+  { id: 'billing-cfg', icon: BanknoteIcon, label: 'Billing Config' },
+  { id: 'firm', icon: LandmarkIcon, label: 'Firm Profile' },
 ];
 
 export default function SettingsPage() {
@@ -20,7 +22,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!currentUser?.isAdmin) {
-      toast('🔒', 'Access denied', 'Settings are admin-only.');
+      toast(LockIcon, 'Access denied', 'Settings are admin-only.');
       router.replace('/dashboard');
     }
   }, [currentUser, router, toast]);
@@ -32,7 +34,7 @@ export default function SettingsPage() {
       <div className="settings-layout">
         <div className="settings-nav-panel">
           {PANELS.map(p => (
-            <button key={p.id} className={`sn-btn${panel === p.id ? ' active' : ''}`} onClick={() => setPanel(p.id)}>{p.icon} {p.label}</button>
+            <button key={p.id} className={`sn-btn${panel === p.id ? ' active' : ''}`} onClick={() => setPanel(p.id)}><p.icon size={14} /> {p.label}</button>
           ))}
         </div>
         <div className="settings-content-panel">
@@ -56,7 +58,7 @@ function UsersPanel() {
           <div className="ss-title" style={{ marginBottom: 2 }}>Team Members</div>
           <div className="ss-sub">Add, edit or remove team members. Changes apply immediately.</div>
         </div>
-        <button className="btn-solid" onClick={() => setModal({ kind: 'member', id: null })} style={{ whiteSpace: 'nowrap' }}>＋ Add Member</button>
+        <button className="btn-solid" onClick={() => setModal({ kind: 'member', id: null })} style={{ whiteSpace: 'nowrap' }}><PlusIcon size={14} /> Add Member</button>
       </div>
       {team.map(e => {
         const level = e.isAdmin ? 'admin' : e.isBilling ? 'billing' : e.isAdmin_assistant ? 'assistant' : 'member';
@@ -76,8 +78,8 @@ function UsersPanel() {
               <span className={`ur-badge ${level}`}>{level[0].toUpperCase() + level.slice(1)}</span>
             </div>
             <div className="ur-actions">
-              <button className="ur-action" onClick={() => setModal({ kind: 'member', id: e.id })}>✏ Edit</button>
-              {!e.isAdmin && <button className="ur-action" style={{ color: 'var(--p-high)' }} onClick={() => deleteMember(e.id)}>🗑</button>}
+              <button className="ur-action" onClick={() => setModal({ kind: 'member', id: e.id })}><PencilIcon size={12} /> Edit</button>
+              {!e.isAdmin && <button className="ur-action" style={{ color: 'var(--p-high)' }} onClick={() => deleteMember(e.id)}><Trash2Icon size={12} /></button>}
             </div>
           </div>
         );
@@ -106,7 +108,7 @@ function NotifPanel() {
         <div key={name} className="toggle-row">
           <div className="tr-info"><div className="tr-name">{name}</div><div className="tr-desc">{desc}</div></div>
           <label className="toggle" style={{ position: 'relative' }}>
-            <input type="checkbox" defaultChecked={on} onChange={() => toast('🔔', 'Saved', 'Notification preference updated.')} />
+            <input type="checkbox" defaultChecked={on} onChange={() => toast(BellIcon, 'Saved', 'Notification preference updated.')} />
             <div className="toggle-track" /><div className="toggle-thumb" />
           </label>
         </div>
@@ -115,16 +117,16 @@ function NotifPanel() {
   );
 }
 
-const INTEGRATIONS: { icon: string; name: string; desc: React.ReactNode; connected: boolean }[] = [
-  { icon: '🗂️', name: 'Google Drive', desc: "Auto-sync uploaded files to the firm's shared Drive folder.", connected: true },
+const INTEGRATIONS: { icon: LucideIcon; name: string; desc: React.ReactNode; connected: boolean }[] = [
+  { icon: HardDriveIcon, name: 'Google Drive', desc: "Auto-sync uploaded files to the firm's shared Drive folder.", connected: true },
   {
-    icon: '📧', name: 'Email (Resend)', connected: true,
+    icon: MailIcon, name: 'Email (Resend)', connected: true,
     desc: <>Send email notifications when tasks are assigned. <a href="https://resend.com" target="_blank" rel="noreferrer" style={{ color: 'var(--s-billing)' }}>Manage at resend.com →</a></>,
   },
-  { icon: '📅', name: 'Google Calendar', desc: 'Sync task deadlines with your Google Calendar.', connected: false },
-  { icon: '📊', name: 'Google Sheets', desc: 'Export billing data automatically to Sheets.', connected: false },
-  { icon: '💬', name: 'Telegram Bot', desc: 'Receive task notifications in Telegram.', connected: false },
-  { icon: '🔐', name: 'DocuSign', desc: 'Send contracts for e-signature from any task.', connected: false },
+  { icon: CalendarIcon, name: 'Google Calendar', desc: 'Sync task deadlines with your Google Calendar.', connected: false },
+  { icon: SheetIcon, name: 'Google Sheets', desc: 'Export billing data automatically to Sheets.', connected: false },
+  { icon: SendIcon, name: 'Telegram Bot', desc: 'Receive task notifications in Telegram.', connected: false },
+  { icon: FileSignatureIcon, name: 'DocuSign', desc: 'Send contracts for e-signature from any task.', connected: false },
 ];
 
 function IntegrationsPanel() {
@@ -135,10 +137,10 @@ function IntegrationsPanel() {
       <div className="ss-sub">Sync Retrieve PM with your existing tools.</div>
       {INTEGRATIONS.map(i => (
         <div key={i.name} className="integ-row">
-          <div className="integ-icon">{i.icon}</div>
+          <div className="integ-icon"><i.icon size={22} /></div>
           <div className="integ-info"><div className="integ-name">{i.name}</div><div className="integ-desc">{i.desc}</div></div>
           <div className={`integ-status ${i.connected ? 'connected' : 'disconnected'}`}>{i.connected ? '● Connected' : '○ Connect'}</div>
-          <button className="ur-action" onClick={() => toast('🔗', i.name, i.connected ? 'Disconnecting…' : 'OAuth flow required in production.')}>
+          <button className="ur-action" onClick={() => toast(LinkIcon, i.name, i.connected ? 'Disconnecting…' : 'OAuth flow required in production.')}>
             {i.connected ? 'Disconnect' : 'Connect'}
           </button>
         </div>
@@ -173,13 +175,13 @@ function BillingConfigPanel() {
             <label className="form-label">1 USD → AMD</label>
             <input className="input" type="number" step={1} defaultValue={fx.AMD}
               onChange={e => { setFx(f => ({ ...f, AMD: +e.target.value })); }}
-              onBlur={() => toast('₾', 'Rate updated', 'AMD rate set.')} />
+              onBlur={() => toast(BanknoteIcon, 'Rate updated', 'AMD rate set.')} />
           </div>
           <div className="form-row">
             <label className="form-label">1 USD → EUR</label>
             <input className="input" type="number" step={0.01} defaultValue={fx.EUR}
               onChange={e => { setFx(f => ({ ...f, EUR: +e.target.value })); }}
-              onBlur={() => toast('€', 'Rate updated', 'EUR rate set.')} />
+              onBlur={() => toast(EuroIcon, 'Rate updated', 'EUR rate set.')} />
           </div>
         </div>
       </div>
@@ -193,7 +195,7 @@ function BillingConfigPanel() {
             <select className="input sel"><option>Net 30 days</option><option>Net 15 days</option><option>Due on receipt</option></select>
           </div>
         </div>
-        <button className="btn-solid" style={{ marginTop: 4 }} onClick={() => toast('💾', 'Saved', 'Billing config updated.')}>Save Changes</button>
+        <button className="btn-solid" style={{ marginTop: 4 }} onClick={() => toast(SaveIcon, 'Saved', 'Billing config updated.')}>Save Changes</button>
       </div>
     </>
   );
@@ -216,7 +218,7 @@ function FirmPanel() {
         <label className="form-label">Bank Details</label>
         <textarea className="input" rows={2} defaultValue="Ameriabank OJSC · IBAN: AM12 3456 7890 1234 5678" />
       </div>
-      <button className="btn-solid" style={{ marginTop: 4 }} onClick={() => toast('💾', 'Saved', 'Firm profile updated.')}>Save Changes</button>
+      <button className="btn-solid" style={{ marginTop: 4 }} onClick={() => toast(SaveIcon, 'Saved', 'Firm profile updated.')}>Save Changes</button>
       <div className="ss-divider" />
       <div className="settings-section">
         <div className="ss-title">Data Management</div>

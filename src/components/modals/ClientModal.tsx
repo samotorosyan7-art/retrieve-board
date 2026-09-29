@@ -6,6 +6,7 @@ import { today } from '@/lib/helpers';
 import type { Client } from '@/lib/types';
 import { useStore } from '../store';
 import { ModalFooter, ModalHeader } from './ModalHost';
+import { CircleCheckIcon, TriangleAlertIcon } from 'lucide-react';
 
 const EMPTY: Omit<Client, 'id'> = {
   name: '', type: 'Corporate', contact: '', email: '', phone: '', address: '', taxId: '', notes: '', since: '', active: true,
@@ -20,14 +21,14 @@ export function ClientModal({ id, onSaved }: { id: string | null; onSaved?: (id:
 
   function submit() {
     const name = c.name.trim(), contact = c.contact.trim();
-    if (!name || !contact) { toast('⚠️', 'Required', 'Client name and contact are required.'); return; }
+    if (!name || !contact) { toast(TriangleAlertIcon, 'Required', 'Client name and contact are required.'); return; }
     const data: Client = {
       ...c, id: existing?.id ?? 'c' + Date.now(), name, contact,
       email: c.email.trim(), phone: c.phone.trim(), taxId: c.taxId.trim(), address: c.address.trim(),
       notes: c.notes.trim(), since: c.since || today(),
     };
     saveClient(data);
-    toast('✅', existing ? 'Client updated' : 'Client added', existing ? `${name} saved.` : `${name} added to your roster.`);
+    toast(CircleCheckIcon, existing ? 'Client updated' : 'Client added', existing ? `${name} saved.` : `${name} added to your roster.`);
     onSaved?.(data.id);
     closeModal();
   }

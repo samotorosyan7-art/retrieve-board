@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { LOGO_SRC } from '@/lib/constants';
 import { getSupabase } from '@/lib/supabase';
 import { useStore } from '@/components/store';
+import { ArrowRightIcon } from 'lucide-react';
 
 const MIN_LENGTH = 10;
 
@@ -72,7 +73,7 @@ export default function ResetPasswordPage() {
                 className="lc-input" type="password" autoComplete="new-password" value={pass2} onChange={e => setPass2(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') submit(); }}
               />
-              <button className="btn-primary" disabled={busy} onClick={submit}>{busy ? 'Saving…' : 'Save password →'}</button>
+              <button className="btn-primary" disabled={busy} onClick={submit}>{busy ? 'Saving…' : <>Save password <ArrowRightIcon size={14} /></>}</button>
               <div className="lc-note" style={{ marginTop: 12 }}>At least {MIN_LENGTH} characters. Don’t reuse a password from another site.</div>
             </>
           )}

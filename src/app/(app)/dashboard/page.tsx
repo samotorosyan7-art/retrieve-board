@@ -4,6 +4,7 @@ import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
 import { AvStack, Photo, Tag, cardTitle } from '@/components/ui';
 import { canSeeMatter, firstWords, fmtShort, isOD, isTaskOD, pri, sanitizeActivity, stat, utilColor, isOpen } from '@/lib/helpers';
+import { ArrowRightIcon, PartyPopperIcon, PlusIcon, TriangleAlertIcon } from 'lucide-react';
 
 export default function DashboardPage() {
   const { projects, tasks, team, activity, currentUser, emp, setModal, openPanel, toggleTask } = useStore();
@@ -39,7 +40,7 @@ export default function DashboardPage() {
             Here&apos;s what needs your attention today — {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
           </div>
         </div>
-        <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}>＋ New Task</button>
+        <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}><PlusIcon size={14} /> New Task</button>
       </div>
 
       <div className="kpi-grid">
@@ -57,7 +58,7 @@ export default function DashboardPage() {
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={cardTitle}>Urgent &amp; Overdue</div>
-              <button className="btn-ghost" style={{ fontSize: 11.5, padding: '4px 10px' }} onClick={() => go('list')}>View all →</button>
+              <button className="btn-ghost" style={{ fontSize: 11.5, padding: '4px 10px' }} onClick={() => go('list')}>View all <ArrowRightIcon size={12} /></button>
             </div>
             {urgent.length ? urgent.map(p => {
               const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
@@ -70,11 +71,11 @@ export default function DashboardPage() {
                   </div>
                   <AvStack ids={p.assignees.slice(0, 2)} />
                   <Tag {...pr} />
-                  <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)' }}>{od ? '⚠ ' : ''}{fmtShort(p.due)}</div>
+                  <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)' }}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtShort(p.due)}</div>
                 </div>
               );
             }) : (
-              <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', padding: '8px 0' }}>All clear — no urgent tasks 🎉</div>
+              <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', padding: '8px 0' }}>All clear — no urgent tasks <PartyPopperIcon size={13} /></div>
             )}
           </div>
 
@@ -154,8 +155,8 @@ export default function DashboardPage() {
                   </div>
                 </div>
               );
-            }) : <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No pending to-dos 🎉</div>}
-            <button className="btn-ghost" style={{ width: '100%', marginTop: 8, fontSize: 12 }} onClick={() => go('tasks')}>View my tasks →</button>
+            }) : <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No pending to-dos <PartyPopperIcon size={13} /></div>}
+            <button className="btn-ghost" style={{ width: '100%', marginTop: 8, fontSize: 12 }} onClick={() => go('tasks')}>View my tasks <ArrowRightIcon size={12} /></button>
           </div>
         </div>
       </div>
