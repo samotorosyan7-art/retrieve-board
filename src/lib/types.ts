@@ -48,27 +48,6 @@ export interface Project {
   createdBy?: string;
 }
 
-export interface Subtask {
-  id: string;
-  title: string;
-  done: boolean;
-}
-
-export interface Task {
-  id: string;
-  pid: string;
-  title: string;
-  who: string;
-  done: boolean;
-  due: string;
-  time: string;
-  priority: PriorityId;
-  estHours: number;
-  notes: string;
-  subtasks: Subtask[];
-  isPrivate?: boolean;
-}
-
 export interface Client {
   id: string;
   name: string;

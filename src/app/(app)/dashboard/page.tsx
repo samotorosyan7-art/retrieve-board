@@ -3,19 +3,21 @@
 import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
 import { AvStack, Photo, Tag, cardTitle } from '@/components/ui';
-import { canSeeMatter, firstWords, fmtShort, isOD, isTaskOD, pri, sanitizeActivity, stat, utilColor, isOpen } from '@/lib/helpers';
-import { ArrowRightIcon, PartyPopperIcon, PlusIcon, TriangleAlertIcon } from 'lucide-react';
+import { canSeeMatter, firstWords, fmtShort, isOD, pri, sanitizeActivity, stat, utilColor, isOpen } from '@/lib/helpers';
+import { ArrowRightIcon, PartyPopperIcon, TriangleAlertIcon } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { projects, tasks, team, activity, currentUser, emp, setModal, openPanel, toggleTask } = useStore();
+  const { projects, team, activity, currentUser, emp, openPanel } = useStore();
   const { go } = useNav();
 
+  // Each KPI opens All Tasks with the same filter, so the list matches the number.
+  const visible = projects.filter(p => canSeeMatter(p, currentUser));
   const kpis = [
-    { val: projects.length, label: 'Total Tasks', sub: 'across all areas', color: '#7C6FF7' },
-    { val: projects.filter(p => p.status === 'inprogress').length, label: 'In Progress', sub: 'in progress now', color: '#E8A838' },
-    { val: projects.filter(p => p.priority === 'high' && isOpen(p)).length, label: 'High Priority', sub: 'need attention', color: '#F87171' },
-    { val: projects.filter(isOD).length, label: 'Overdue', sub: 'past due date', color: '#EF4444' },
-    { val: projects.filter(p => p.status === 'done').length, label: 'Completed', sub: 'all time', color: '#34D399' },
+    { val: visible.length, label: 'Total Tasks', sub: 'across all areas', color: '#7C6FF7', href: 'list' },
+    { val: visible.filter(p => p.status === 'inprogress').length, label: 'In Progress', sub: 'in progress now', color: '#E8A838', href: 'list?stat=inprogress' },
+    { val: visible.filter(p => p.priority === 'high' && isOpen(p)).length, label: 'High Priority', sub: 'need attention', color: '#F87171', href: 'list?pri=high&stat=open' },
+    { val: visible.filter(isOD).length, label: 'Overdue', sub: 'past due date', color: '#EF4444', href: 'list?stat=overdue' },
+    { val: visible.filter(p => p.status === 'done').length, label: 'Completed', sub: 'all time', color: '#34D399', href: 'list?stat=done' },
   ];
   const urgent = projects.filter(p => (isOD(p) || p.priority === 'high') && canSeeMatter(p, currentUser)).slice(0, 5);
   const activeFor = (id: string) => projects.filter(p => p.assignees.includes(id) && isOpen(p)).length;
@@ -26,8 +28,12 @@ export default function DashboardPage() {
   const topAreas = Object.entries(areaCt).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const maxA = topAreas[0]?.[1] || 1;
 
-  const pendTasks = tasks.filter(t => !t.done).length;
-  const myTasks = tasks.filter(t => t.who === currentUser?.id && !t.done).slice(0, 4);
+  // My open tasks — overdue first, then soonest deadline.
+  const myOpen = projects.filter(p => !!currentUser && p.assignees.includes(currentUser.id) && isOpen(p));
+  const myTasks = [...myOpen].sort((a, b) => {
+    if (isOD(a) !== isOD(b)) return isOD(a) ? -1 : 1;
+    return (a.due || '9999-12-31').localeCompare(b.due || '9999-12-31');
+  }).slice(0, 4);
 
   return (
     <div className="page active" id="page-dashboard">
@@ -40,12 +46,11 @@ export default function DashboardPage() {
             Here&apos;s what needs your attention today — {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
           </div>
         </div>
-        <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}><PlusIcon size={14} /> New Task</button>
       </div>
 
       <div className="kpi-grid">
         {kpis.map(k => (
-          <div key={k.label} className="kpi-card" style={{ '--kpi-color': k.color } as React.CSSProperties} onClick={() => go('list')}>
+          <div key={k.label} className="kpi-card" style={{ '--kpi-color': k.color } as React.CSSProperties} onClick={() => go(k.href)}>
             <div className="kpi-val">{k.val}</div>
             <div className="kpi-label">{k.label}</div>
             <div className="kpi-sub">{k.sub}</div>
@@ -138,24 +143,22 @@ export default function DashboardPage() {
 
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div style={cardTitle}>My To-dos</div>
-              <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>{pendTasks} pending</span>
+              <div style={cardTitle}>My Tasks</div>
+              <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>{myOpen.length} open</span>
             </div>
-            {myTasks.length ? myTasks.map(t => {
-              const p = projects.find(x => x.id === t.pid);
+            {myTasks.length ? myTasks.map(p => {
+              const od = isOD(p);
               return (
-                <div key={t.id} className="task-item" style={{ marginBottom: 5 }}>
-                  <div className="task-chk pend" onClick={() => toggleTask(t.id)} />
-                  <div className="task-body">
-                    <div className="task-title">{t.title}</div>
-                    <div className="task-meta">
-                      <span className="task-matter">{p?.title || ''}</span>
-                      <span className={`task-due${isTaskOD(t) ? ' overdue' : ''}`}>· {fmtShort(t.due)}</span>
-                    </div>
+                <div key={p.id} className="urgent-row" onClick={() => openPanel(p.id)}>
+                  <div className="urgent-dot" style={{ background: od ? '#F87171' : stat(p.status).col }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="urgent-title">{p.title}</div>
+                    <div className="urgent-client">{p.client}</div>
                   </div>
+                  <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)' }}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtShort(p.due)}</div>
                 </div>
               );
-            }) : <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No pending to-dos <PartyPopperIcon size={13} /></div>}
+            }) : <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No open tasks assigned to you <PartyPopperIcon size={13} /></div>}
             <button className="btn-ghost" style={{ width: '100%', marginTop: 8, fontSize: 12 }} onClick={() => go('tasks')}>View my tasks <ArrowRightIcon size={12} /></button>
           </div>
         </div>

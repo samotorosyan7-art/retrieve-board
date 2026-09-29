@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { AREAS, MATTER_TYPES, PRIORITIES, STATUSES } from '@/lib/constants';
-import { canSeeMatter, firstWords } from '@/lib/helpers';
+import { canSeeMatter, firstWords, isOD, isOpen } from '@/lib/helpers';
 import type { Project } from '@/lib/types';
 import { useStore } from './store';
 import { XIcon } from 'lucide-react';
@@ -13,12 +13,16 @@ const EMPTY: Filters = { client: '', type: '', emp: '', area: '', pri: '', stat:
 const byDate = (key: 'due' | 'created', dir: 1 | -1, fallback: string) =>
   (a: Project, b: Project) => dir * (new Date(a[key] || fallback).getTime() - new Date(b[key] || fallback).getTime());
 
-/** Filters seeded from the URL, e.g. /list?emp=<id> (Team Workload's "View all tasks"). The app only renders client-side. */
+/** Filters seeded from the URL, e.g. /list?emp=<id> (Team Workload) or /list?stat=overdue (Dashboard KPIs). The app only renders client-side. */
 const fromUrl = (): Filters => {
   if (typeof window === 'undefined') return EMPTY;
   const q = new URLSearchParams(window.location.search);
-  return { ...EMPTY, emp: q.get('emp') || '' };
+  return { ...EMPTY, emp: q.get('emp') || '', stat: q.get('stat') || '', pri: q.get('pri') || '' };
 };
+
+/** Status filter values beyond the real statuses: 'open' = not completed/archived, 'overdue' = open and past due. */
+const matchesStat = (p: Project, stat: string) =>
+  stat === 'open' ? isOpen(p) : stat === 'overdue' ? isOD(p) : p.status === stat;
 
 /** Filter state + the visible, filtered, sorted matter list (Kanban and List pages). All filters combine (AND). */
 export function useMatterFilters() {
@@ -33,7 +37,7 @@ export function useMatterFilters() {
     if (f.emp && !p.assignees.includes(f.emp)) return false;
     if (f.area && p.area !== f.area) return false;
     if (f.pri && p.priority !== f.pri) return false;
-    if (f.stat && p.status !== f.stat) return false;
+    if (f.stat && !matchesStat(p, f.stat)) return false;
     if (q && !p.title.toLowerCase().includes(q) && !p.client.toLowerCase().includes(q)) return false;
     return true;
   });
@@ -82,6 +86,8 @@ export function MatterFilterRow({
       {withStatus && (
         <select className="sel" {...bind('stat')}>
           <option value="">All statuses</option>
+          <option value="open">Open (not completed)</option>
+          <option value="overdue">Overdue</option>
           {STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
       )}

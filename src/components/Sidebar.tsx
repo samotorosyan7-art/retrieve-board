@@ -12,7 +12,7 @@ import type { LucideIcon } from 'lucide-react';
 type NavItem = { id: string; icon: LucideIcon; label: string; badge?: number; badgeStyle?: React.CSSProperties };
 
 export function Sidebar() {
-  const { currentUser, clients, tasks, projects, chatUnread, search, setSearch, isDark, toggleTheme, logout } = useStore();
+  const { currentUser, clients, projects, chatUnread, search, setSearch, isDark, toggleTheme, logout } = useStore();
   const { page, go } = useNav();
   const router = useRouter();
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -20,8 +20,7 @@ export function Sidebar() {
 
   const isAdmin = !!currentUser.isAdmin;
   const isBilling = !!(currentUser.isBilling || currentUser.isAdmin);
-  const pendingTasks = tasks.filter(t => t.who === currentUser.id && !t.done).length
-    + projects.filter(p => isOpen(p) && p.assignees.includes(currentUser.id)).length;
+  const pendingTasks = projects.filter(p => isOpen(p) && p.assignees.includes(currentUser.id)).length;
   const myTasks = { id: 'tasks', icon: ListChecksIcon, label: 'My Tasks', badge: pendingTasks };
 
   const link = (n: NavItem) => (

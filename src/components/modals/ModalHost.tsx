@@ -5,7 +5,6 @@ import { ClientModal } from './ClientModal';
 import { LogTimeModal } from './LogTimeModal';
 import { MatterModal } from './MatterModal';
 import { MemberModal } from './MemberModal';
-import { TaskModal } from './TaskModal';
 import { XIcon } from 'lucide-react';
 
 export function ModalHost() {
@@ -13,7 +12,6 @@ export function ModalHost() {
   return (
     <div className={`modal-backdrop${modal ? ' open' : ''}`} onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
       <div className="modal-box">
-        {modal?.kind === 'task' && <TaskModal key={modal.id ?? 'new'} id={modal.id} />}
         {modal?.kind === 'matter' && <MatterModal client={modal.client} />}
         {modal?.kind === 'logTime' && <LogTimeModal />}
         {modal?.kind === 'client' && <ClientModal key={modal.id ?? 'new'} id={modal.id} onSaved={modal.onSaved} />}

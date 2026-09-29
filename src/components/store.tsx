@@ -3,22 +3,22 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { DEFAULT_FX } from '@/lib/constants';
 import {
-  loadAll, loadMessages, rowToActivity, rowToClient, rowToMember, rowToMessage, rowToProject, rowToTask, write, type Mutation,
+  loadAll, loadMessages, rowToActivity, rowToClient, rowToMember, rowToMessage, rowToProject, write, type Mutation,
 } from '@/lib/db';
 import { sendMatterAssignmentEmail } from '@/lib/email';
 import { canDeleteMatter, stat, today } from '@/lib/helpers';
 import { getSupabase } from '@/lib/supabase';
 import type {
-  Activity, ChatMessage, Client, Currency, Member, Project, StatusId, SyncState, Task, TimeLog,
+  Activity, ChatMessage, Client, Currency, Member, Project, StatusId, SyncState, TimeLog,
 } from '@/lib/types';
-import { ArchiveIcon, CircleCheckIcon, GlobeIcon, LockIcon, MailIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
+import { ArchiveIcon, GlobeIcon, LockIcon, MailIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /* ── localStorage: theme (always) + a per-user data cache for instant paint, wiped on sign-out ── */
 const THEME_KEY = 'retrieve_theme';
 const CACHE_KEY = 'retrieve_cache_v2';
 const LEGACY_KEYS = ['retrieve_pm_v1', 'retrieve_session']; // pre-auth versions — removed on load
-type Snapshot = { owner: string; team: Member[]; projects: Project[]; tasks: Task[]; clients: Client[]; activity: Activity[] };
+type Snapshot = { owner: string; team: Member[]; projects: Project[]; clients: Client[]; activity: Activity[] };
 
 function readCache(owner: string): Snapshot | null {
   try {
@@ -32,7 +32,6 @@ function readCache(owner: string): Snapshot | null {
 export type AuthStatus = 'loading' | 'signedOut' | 'noAccess' | 'signedIn';
 
 export type ModalState =
-  | { kind: 'task'; id: string | null }
   | { kind: 'matter'; client?: string }
   | { kind: 'logTime' }
   | { kind: 'client'; id: string | null; onSaved?: (id: string) => void }
@@ -47,7 +46,6 @@ function useStoreValue() {
   const [teamLoaded, setTeamLoaded] = useState(false);
   const [team, setTeam] = useState<Member[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
   const [isDark, setIsDark] = useState(true);
@@ -72,8 +70,8 @@ function useStoreValue() {
   const hydrated = authStatus !== 'loading';
 
   // Refs so async callbacks (realtime, debounces) always see fresh state.
-  const state = useRef({ projects, tasks, clients, currentUser, team });
-  state.current = { projects, tasks, clients, currentUser, team };
+  const state = useRef({ projects, clients, currentUser, team });
+  state.current = { projects, clients, currentUser, team };
   const chatVisible = useRef(false);
 
   /* ── Toasts ── */
@@ -103,7 +101,7 @@ function useStoreValue() {
     if (n > 0) dirty.current.set(key, n); else dirty.current.delete(key);
   };
   const mutationKey = (m: Mutation) => {
-    const table = { project: 'projects', project_delete: 'projects', task: 'tasks', task_delete: 'tasks', client: 'clients', client_delete: 'clients', member: 'team_members', member_delete: 'team_members' }[m.type as string];
+    const table = { project: 'projects', project_delete: 'projects', client: 'clients', client_delete: 'clients', member: 'team_members', member_delete: 'team_members' }[m.type as string];
     const id = 'entity' in m ? (m.entity as { id?: string }).id : 'id' in m ? m.id : undefined;
     return table && id ? `${table}:${id}` : null;
   };
@@ -152,7 +150,6 @@ function useStoreValue() {
         // Columns missing from the DB (before the migration) fall back to this browser's copy.
         return old ? { matterType: old.matterType, isPrivate: old.isPrivate, createdBy: old.createdBy, ...p } : p;
       }));
-      setTasks(data.tasks);
       setClients(data.clients);
       setActivity(data.activity);
     } catch (e) {
@@ -182,13 +179,13 @@ function useStoreValue() {
   // While signed in: cached data → live data → realtime. On sign-out: clear everything.
   useEffect(() => {
     if (!sessionEmail) {
-      setTeam([]); setProjects([]); setTasks([]); setClients([]); setActivity([]); setChatMessages({});
+      setTeam([]); setProjects([]); setClients([]); setActivity([]); setChatMessages({});
       setTeamLoaded(false); setSelectedPid(null); setModal(null);
       return;
     }
     const snap = readCache(sessionEmail);
     if (snap) {
-      setTeam(snap.team); setProjects(snap.projects); setTasks(snap.tasks); setClients(snap.clients); setActivity(snap.activity);
+      setTeam(snap.team); setProjects(snap.projects); setClients(snap.clients); setActivity(snap.activity);
       setTeamLoaded(true);
     }
     reload();
@@ -196,7 +193,7 @@ function useStoreValue() {
     const sb = getSupabase();
     if (!sb) return;
     const channel = sb.channel('retrieve-live');
-    for (const table of ['team_members', 'projects', 'tasks', 'clients', 'activity']) {
+    for (const table of ['team_members', 'projects', 'clients', 'activity']) {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, payload => applyRealtime(table, payload));
     }
     let connectedOnce = false;
@@ -239,8 +236,6 @@ function useStoreValue() {
         return upsertOrDelete(ps, next && old ? { matterType: old.matterType, isPrivate: old.isPrivate, createdBy: old.createdBy, ...next } : next);
       });
       if (isDelete) setSelectedPid(cur => (cur === id ? null : cur));
-    } else if (table === 'tasks') {
-      setTasks(ts => upsertOrDelete(ts, isDelete ? null : rowToTask(row)));
     } else if (table === 'clients') {
       setClients(cs => upsertOrDelete(cs, isDelete ? null : rowToClient(row)));
     }
@@ -250,10 +245,10 @@ function useStoreValue() {
   useEffect(() => {
     if (authStatus !== 'signedIn' || !sessionEmail) return;
     try {
-      const snap: Snapshot = { owner: sessionEmail, team, projects, tasks, clients, activity };
+      const snap: Snapshot = { owner: sessionEmail, team, projects, clients, activity };
       localStorage.setItem(CACHE_KEY, JSON.stringify(snap));
     } catch {}
-  }, [authStatus, sessionEmail, team, projects, tasks, activity, clients]);
+  }, [authStatus, sessionEmail, team, projects, activity, clients]);
 
   // Theme attribute.
   useEffect(() => {
@@ -398,7 +393,7 @@ function useStoreValue() {
     }
     setConfirmState({
       title: 'Delete task?',
-      msg: `"${p.title}" and its time log will be permanently removed. To-dos linked to it are kept. This cannot be undone.`,
+      msg: `"${p.title}" and its time log will be permanently removed. This cannot be undone.`,
       confirmLabel: 'Delete task',
       onConfirm: async () => {
         setProjects(ps => ps.filter(x => x.id !== id));
@@ -417,42 +412,6 @@ function useStoreValue() {
     notifyAssigned(saveProject(p), p.id, p.assignees);
     addActivity(me(), `created task <b>${p.title}</b>`);
     return p;
-  };
-
-  /* ── Tasks ── */
-  const saveTask = (t: Task) => {
-    setTasks(ts => (ts.some(x => x.id === t.id) ? ts.map(x => (x.id === t.id ? t : x)) : [...ts, t]));
-    persist({ type: 'task', entity: t });
-  };
-  const toggleTask = (id: string) => {
-    const t = state.current.tasks.find(x => x.id === id);
-    if (!t) return;
-    saveTask({ ...t, done: !t.done });
-    toast(CircleCheckIcon, 'To-do updated', !t.done ? 'Marked complete.' : 'Moved back to pending.');
-  };
-  const toggleSubtask = (tid: string, sid: string) => {
-    const t = state.current.tasks.find(x => x.id === tid);
-    if (!t) return;
-    saveTask({ ...t, subtasks: t.subtasks.map(s => (s.id === sid ? { ...s, done: !s.done } : s)) });
-  };
-  const addSubtask = (tid: string, title: string) => {
-    const t = state.current.tasks.find(x => x.id === tid);
-    if (!t || !title.trim()) return;
-    saveTask({ ...t, subtasks: [...(t.subtasks || []), { id: 'ss' + Date.now(), title: title.trim(), done: false }] });
-  };
-  const deleteTask = (id: string) => {
-    const t = state.current.tasks.find(x => x.id === id);
-    if (!t) return;
-    setConfirmState({
-      title: 'Delete to-do?',
-      msg: `"${t.title}" will be permanently removed.`,
-      confirmLabel: 'Delete to-do',
-      onConfirm: async () => {
-        setTasks(ts => ts.filter(x => x.id !== id));
-        if (await persist({ type: 'task_delete', id })) toast(Trash2Icon, 'To-do deleted', t.title);
-        else reload();
-      },
-    });
   };
 
   /* ── Clients ── */
@@ -532,14 +491,13 @@ function useStoreValue() {
   };
 
   return {
-    hydrated, authStatus, team, projects, tasks, clients, activity, isDark, currentUser, sync,
+    hydrated, authStatus, team, projects, clients, activity, isDark, currentUser, sync,
     selectedPid, modal, toasts, confirmState, setConfirmState, search, billingCurrency, fx, chatMessages, chatUnread,
     setSearch, setBillingCurrency, setFx, setSelectedPid, setModal,
     toggleTheme: () => setIsDark(d => !d),
     toast, login, logout, sendPasswordEmail, emp, openPanel, closePanel: () => setSelectedPid(null),
     closeModal: () => setModal(null),
     addActivity, saveProject, patchProject, setStatus, setProgress, togglePrivacy, addTimeLog, setAssignees, createProject, archiveProject, deleteProject,
-    saveTask, toggleTask, toggleSubtask, addSubtask, deleteTask,
     saveClient, deleteClient, saveMember, deleteMember,
     loadRoom, sendMessage, setChatVisible, clearSavedState,
   };

@@ -95,7 +95,7 @@ const NOTIFS: [string, string, boolean][] = [
   ['File uploaded', 'Alert when a file is added to your task', false],
   ['New task assigned', 'Alert when added to a new task', true],
   ['Invoice dispatched', 'Confirmation when billing report is sent', true],
-  ['Weekly digest (Monday)', 'Summary of your active tasks and pending to-dos', false],
+  ['Weekly digest (Monday)', 'Summary of your active tasks and upcoming deadlines', false],
 ];
 
 function NotifPanel() {

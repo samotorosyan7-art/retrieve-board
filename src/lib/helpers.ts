@@ -17,8 +17,6 @@ export const isOD = (p: Project) => {
   const d = parseDate(p.due);
   return !!d && d < new Date();
 };
-export const isTaskOD = (t: { done: boolean; due: string }) => !t.done && !!t.due && new Date(t.due) < new Date();
-
 export const progColor = (v: number) => (v >= 80 ? '#34D399' : v >= 40 ? '#FB923C' : '#F87171');
 export const utilColor = (pct: number) => (pct > 80 ? '#F87171' : pct > 55 ? '#FB923C' : '#34D399');
 

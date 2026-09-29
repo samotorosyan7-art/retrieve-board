@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { MATTER_TYPES, PRIORITIES, STATUSES } from '@/lib/constants';
-import { canDeleteMatter, fmtDate, isOD, isTaskOD, pri, progColor, stat, today } from '@/lib/helpers';
+import { canDeleteMatter, fmtDate, isOD, pri, progColor, stat, today } from '@/lib/helpers';
 import type { Project } from '@/lib/types';
 import { useStore } from './store';
 import { Photo, Tag } from './ui';
@@ -20,11 +20,10 @@ export function DetailPanel() {
 
 function PanelContent({ p }: { p: Project }) {
   const {
-    currentUser, tasks, team, emp, closePanel, togglePrivacy, setProgress, setStatus, patchProject,
-    toggleTask, toggleSubtask, deleteTask, addTimeLog, setAssignees, addActivity, archiveProject, deleteProject, toast,
+    currentUser, team, emp, closePanel, togglePrivacy, setProgress, setStatus, patchProject,
+    addTimeLog, setAssignees, addActivity, archiveProject, deleteProject, toast,
   } = useStore();
   const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
-  const pTasks = tasks.filter(t => t.pid === p.id && (!t.isPrivate || t.who === currentUser?.id));
   const isOwner = !p.createdBy || p.createdBy === currentUser?.id;
   // Admins log time for anyone; everyone else only for themselves, and only on tasks they're assigned to.
   const isAdmin = !!currentUser?.isAdmin;
@@ -201,59 +200,6 @@ function PanelContent({ p }: { p: Project }) {
           </div>
           <textarea className="input" rows={3} style={{ resize: 'vertical', fontSize: 12.5, lineHeight: 1.6 }} value={notes} onChange={e => setNotes(e.target.value)} />
         </div>
-
-        {/* TASKS */}
-        {pTasks.length > 0 && (
-          <div className="dp-section">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
-              <div className="dp-section-label" style={{ marginBottom: 0 }}>To-dos ({pTasks.length})</div>
-            </div>
-            {pTasks.map(t => {
-              const e = emp(t.who), tpr = pri(t.priority || 'medium');
-              const subs = t.subtasks || [];
-              const doneS = subs.filter(s => s.done).length;
-              const tod = isTaskOD(t);
-              return (
-                <div className="dp-task-item" key={t.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                    <div className={`dti-chk ${t.done ? 'done' : 'pend'}`} onClick={() => toggleTask(t.id)}>{t.done && <CheckIcon size={12} />}</div>
-                    <div style={{ flex: 1 }}>
-                      <div className={`dti-title${t.done ? ' done' : ''}`}>{t.title}</div>
-                      <div className="dti-due" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
-                        <span>{e?.name.split(' ')[0] || ''}</span>
-                        {t.time && <span style={{ fontFamily: 'var(--font-mono)', background: 'var(--bg-overlay)', padding: '0 5px', borderRadius: 3 }}>{t.time}</span>}
-                        <span style={{ color: tod ? 'var(--p-high)' : 'var(--text-tertiary)' }}>{tod && <><TriangleAlertIcon size={11} /> </>}Due {fmtDate(t.due)}</span>
-                        {!!t.estHours && <span style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{t.estHours}h est.</span>}
-                      </div>
-                    </div>
-                    <Tag {...tpr} />
-                    <button
-                      title="Delete to-do" onClick={() => deleteTask(t.id)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--p-high)', opacity: 0.75, padding: '0 2px' }}
-                    >
-                      <Trash2Icon size={12} />
-                    </button>
-                  </div>
-                  {subs.length > 0 && (
-                    <div style={{ paddingLeft: 28 }}>
-                      <div style={{ marginBottom: 4 }}>
-                        <div className="util-track">
-                          <div className="util-fill" style={{ width: `${Math.round((doneS / subs.length) * 100)}%`, background: doneS === subs.length ? 'var(--s-done)' : 'var(--s-inprogress)' }} />
-                        </div>
-                      </div>
-                      {subs.map(s => (
-                        <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-                          <div className={`tc-sub-chk ${s.done ? 'done' : 'pend'}`} onClick={() => toggleSubtask(t.id, s.id)}>{s.done && <CheckIcon size={10} />}</div>
-                          <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', textDecoration: s.done ? 'line-through' : undefined, flex: 1 }}>{s.title}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
 
         {/* TIME LOG */}
         <div className="dp-section">

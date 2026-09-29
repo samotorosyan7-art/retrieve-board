@@ -1,5 +1,5 @@
 import { getSupabase } from './supabase';
-import type { Activity, ChatMessage, Client, Member, Project, Task } from './types';
+import type { Activity, ChatMessage, Client, Member, Project } from './types';
 
 /* ── Row converters (DB snake_case ↔ app camelCase) ── */
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -34,24 +34,6 @@ export function rowToProject(r: Row): Project {
     ...('matter_type' in r ? { matterType: r.matter_type || '' } : {}),
     ...('is_private' in r ? { isPrivate: !!r.is_private } : {}),
     ...('created_by' in r ? { createdBy: r.created_by || undefined } : {}),
-  };
-}
-export function taskToRow(t: Task) {
-  return {
-    id: t.id, project_id: t.pid || null, title: t.title,
-    assigned_to: t.who, done: !!t.done,
-    due_date: t.due || null, time_slot: t.time || null,
-    priority: t.priority || 'medium', est_hours: t.estHours || 0,
-    notes: t.notes || '', subtasks: t.subtasks || [],
-  };
-}
-export function rowToTask(r: Row): Task {
-  return {
-    id: r.id, pid: r.project_id || '', title: r.title,
-    who: r.assigned_to, done: !!r.done,
-    due: r.due_date || '', time: r.time_slot || '',
-    priority: r.priority || 'medium', estHours: r.est_hours || 0,
-    notes: r.notes || '', subtasks: r.subtasks || [],
   };
 }
 export function clientToRow(c: Client) {
@@ -96,20 +78,18 @@ export function rowToMessage(r: Row): ChatMessage {
 export async function loadAll() {
   const sb = getSupabase();
   if (!sb) throw new Error('No database connection');
-  const [mRes, pRes, tRes, cRes, aRes] = await Promise.all([
+  const [mRes, pRes, cRes, aRes] = await Promise.all([
     sb.from('team_members').select('*').order('created_at'),
     sb.from('projects').select('*').order('created_at', { ascending: false }),
-    sb.from('tasks').select('*').order('due_date'),
     sb.from('clients').select('*').order('name'),
     sb.from('activity').select('*').order('created_at', { ascending: false }).limit(20),
   ]);
-  for (const res of [mRes, pRes, tRes, cRes, aRes]) if (res.error) throw res.error;
+  for (const res of [mRes, pRes, cRes, aRes]) if (res.error) throw res.error;
   const sample = pRes.data?.[0];
   if (sample) for (const c of OPTIONAL_PROJECT_COLS) if (c in sample) projectCols.add(c);
   return {
     team: (mRes.data || []).map(rowToMember),
     projects: (pRes.data || []).map(rowToProject),
-    tasks: (tRes.data || []).map(rowToTask),
     clients: (cRes.data || []).map(rowToClient),
     activity: (aRes.data || []).map(rowToActivity),
   };
@@ -131,8 +111,6 @@ export async function loadMessages(roomId: string) {
 export type Mutation =
   | { type: 'project'; entity: Project }
   | { type: 'project_delete'; id: string }
-  | { type: 'task'; entity: Task }
-  | { type: 'task_delete'; id: string }
   | { type: 'client'; entity: Client }
   | { type: 'client_delete'; id: string }
   | { type: 'member'; entity: Member }
@@ -152,9 +130,7 @@ export async function write(m: Mutation) {
   };
   switch (m.type) {
     case 'project':       res = await sb.from('projects').upsert(projectToRow(m.entity), { onConflict: 'id' }); break;
-    case 'task':          res = await sb.from('tasks').upsert(taskToRow(m.entity), { onConflict: 'id' }); break;
     case 'project_delete': res = await del('projects', m.id); break;
-    case 'task_delete':   res = await del('tasks', m.id); break;
     case 'client':        res = await sb.from('clients').upsert(clientToRow(m.entity), { onConflict: 'id' }); break;
     case 'client_delete': res = await del('clients', m.id); break;
     case 'member':        res = await sb.from('team_members').upsert(memberToRow(m.entity), { onConflict: 'id' }); break;

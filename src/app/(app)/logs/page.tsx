@@ -19,6 +19,11 @@ const PRESETS: [string, () => Partial<Filters>][] = [
   ['All time', () => ({ from: '', to: '' })],
 ];
 
+/** Open the native calendar on a click anywhere in the field, not just on the small icon. */
+const openPicker = (e: React.MouseEvent<HTMLInputElement>) => {
+  try { e.currentTarget.showPicker(); } catch {}
+};
+
 export default function LogsPage() {
   const { projects, team, emp, currentUser, openPanel, search } = useStore();
   const [f, setF] = useState<Filters>(EMPTY);
@@ -44,20 +49,21 @@ export default function LogsPage() {
 
   return (
     <div className="page active" id="page-logs">
-      <PageHeader title="Time" light="Logs" sub={`${rows.length} entr${rows.length === 1 ? 'y' : 'ies'} · ${total}h`}>
+      <PageHeader title="Time" light="Logs" sub={`${rows.length} entr${rows.length === 1 ? 'y' : 'ies'} · ${total}h logged`} />
+
+      <div className="filter-row">
         <div className="seg-ctrl">
           {PRESETS.map(([label, range]) => {
             const r = range();
             const on = f.from === (r.from ?? '') && f.to === (r.to ?? '');
-            return <button key={label} className={`seg-btn${on ? ' active' : ''}`} onClick={() => setF(x => ({ ...x, ...r }))}>{label}</button>;
+            return <button key={label} className={`seg-btn${on ? ' active' : ''}`} style={{ whiteSpace: 'nowrap' }} onClick={() => setF(x => ({ ...x, ...r }))}>{label}</button>;
           })}
         </div>
-      </PageHeader>
-
-      <div className="filter-row">
-        <input className="input" type="date" value={f.from} onChange={set('from')} title="From" style={{ width: 150 }} />
-        <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>to</span>
-        <input className="input" type="date" value={f.to} onChange={set('to')} title="To" style={{ width: 150 }} />
+        <div className="logs-range">
+          <input className="sel" type="date" value={f.from} max={f.to || undefined} onChange={set('from')} onClick={openPicker} aria-label="From date" />
+          <span>→</span>
+          <input className="sel" type="date" value={f.to} min={f.from || undefined} onChange={set('to')} onClick={openPicker} aria-label="To date" />
+        </div>
         <select className="sel" value={f.who} onChange={set('who')}>
           <option value="">All members</option>
           {team.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
@@ -66,12 +72,12 @@ export default function LogsPage() {
           <option value="">All clients</option>
           {clientNames.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <input className="input" placeholder="Search task or description…" value={f.q} onChange={set('q')} style={{ width: 220 }} />
+        <input className="sel" placeholder="Search task or description…" value={f.q} onChange={set('q')} style={{ width: 220, cursor: 'text' }} />
         <button className="btn-ghost" onClick={() => setF(EMPTY)} style={{ fontSize: 12, padding: '6px 12px' }}><XIcon size={12} /> Clear</button>
       </div>
 
       {byMember.length > 1 && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14, flexShrink: 0 }}>
           {byMember.map(({ e, h }) => (
             <button
               key={e.id} className={`seg-btn${f.who === e.id ? ' active' : ''}`}
