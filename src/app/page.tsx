@@ -17,7 +17,7 @@ const FEATURES: [LucideIcon, string][] = [
 ];
 
 export default function LandingPage() {
-  const { authStatus, currentUser, login, logout, sendPasswordEmail, isDark, toggleTheme } = useStore();
+  const { authStatus, currentUser, passwordRecovery, login, logout, sendPasswordEmail, isDark, toggleTheme } = useStore();
   const router = useRouter();
 
   const [email, setEmail] = useState('');
@@ -26,15 +26,19 @@ export default function LandingPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  // 'forgot' swaps the card to the reset-password form.
+  const [mode, setMode] = useState<'login' | 'forgot'>('login');
   const passRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // Admins start on the dashboard; everyone else on their own tasks.
+    // A reset link can land here (Supabase falls back to the Site URL): go set the new password first.
+    if (passwordRecovery && authStatus !== 'signedOut') { router.replace('/reset-password'); return; }
     if (authStatus !== 'signedIn') return;
     // Back to the page that sent them here (only same-site paths), else their home page.
     const next = new URLSearchParams(location.search).get('next');
     router.replace(next && /^\/(?![/\\])/.test(next) ? next : currentUser?.isAdmin ? '/dashboard' : '/tasks');
-  }, [authStatus, currentUser, router]);
+  }, [authStatus, currentUser, passwordRecovery, router]);
 
   async function attemptLogin() {
     if (!email.trim() || !pass) { setError('Please enter your email and password.'); return; }
@@ -48,8 +52,12 @@ export default function LandingPage() {
     }
   }
 
+  function switchMode(next: 'login' | 'forgot') {
+    setMode(next); setError(''); setNotice(''); setPass('');
+  }
+
   async function forgotPassword() {
-    if (!email.trim()) { setError('Enter your work email above, then click "Forgot password?" again.'); return; }
+    if (!email.trim()) { setError('Please enter your work email.'); return; }
     setBusy(true); setError(''); setNotice('');
     const err = await sendPasswordEmail(email);
     setBusy(false);
@@ -101,8 +109,12 @@ export default function LandingPage() {
 
         <div className="login-card">
           <div className="lc-eyebrow"><span className="lc-lock"><LockKeyholeIcon size={12} /></span> Secure Sign-in</div>
-          <div className="lc-title">Welcome back</div>
-          <div className="lc-sub">Retrieve Legal &amp; Tax · Internal Platform</div>
+          <div className="lc-title">{mode === 'forgot' ? 'Reset your password' : 'Welcome back'}</div>
+          <div className="lc-sub">
+            {mode === 'forgot'
+              ? 'Enter your work email and we\u2019ll send you a link to set a new password.'
+              : 'Retrieve Legal & Tax · Internal Platform'}
+          </div>
 
           {authStatus === 'noAccess' && (
             <div className="login-error">
@@ -115,34 +127,55 @@ export default function LandingPage() {
             <div className="login-error" style={{ background: 'rgba(52,211,153,0.1)', borderColor: 'rgba(52,211,153,0.3)', color: '#34D399' }}>{notice}</div>
           )}
 
-          <label className="lc-label">Work email</label>
-          <input
-            className="lc-input" type="email" placeholder="you@retrieve.am" autoComplete="username"
-            value={email} onChange={e => setEmail(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') passRef.current?.focus(); }}
-          />
+          {mode === 'forgot' ? (
+            <>
+              <label className="lc-label">Work email</label>
+              <input
+                className="lc-input" type="email" placeholder="you@retrieve.am" autoComplete="username" autoFocus
+                value={email} onChange={e => setEmail(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') forgotPassword(); }}
+              />
+              <button className="btn-primary" disabled={busy} onClick={forgotPassword}>
+                {busy ? 'Please wait…' : <>Send reset link <ArrowRightIcon size={14} /></>}
+              </button>
+              <div style={{ textAlign: 'right', marginTop: 10 }}>
+                <a href="#" onClick={e => { e.preventDefault(); switchMode('login'); }} style={{ fontSize: 12, color: 'var(--text-secondary)', textDecoration: 'underline' }}>
+                  Back to sign in
+                </a>
+              </div>
+            </>
+          ) : (
+            <>
+              <label className="lc-label">Work email</label>
+              <input
+                className="lc-input" type="email" placeholder="you@retrieve.am" autoComplete="username"
+                value={email} onChange={e => setEmail(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') passRef.current?.focus(); }}
+              />
 
-          <label className="lc-label">Password</label>
-          <div className="lc-pass-wrap">
-            <input
-              ref={passRef} className="lc-input" type={showPass ? 'text' : 'password'} placeholder="••••••••"
-              autoComplete="current-password"
-              value={pass} onChange={e => setPass(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') attemptLogin(); }}
-            />
-            <button className="lc-eye" type="button" onClick={() => setShowPass(s => !s)} title="Show/hide password">
-              {showPass ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-            </button>
-          </div>
+              <label className="lc-label">Password</label>
+              <div className="lc-pass-wrap">
+                <input
+                  ref={passRef} className="lc-input" type={showPass ? 'text' : 'password'} placeholder="••••••••"
+                  autoComplete="current-password"
+                  value={pass} onChange={e => setPass(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') attemptLogin(); }}
+                />
+                <button className="lc-eye" type="button" onClick={() => setShowPass(s => !s)} title="Show/hide password">
+                  {showPass ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+                </button>
+              </div>
 
-          <button className="btn-primary" disabled={busy || authStatus === 'loading'} onClick={attemptLogin}>
-            {busy ? 'Please wait…' : <>Sign In <ArrowRightIcon size={14} /></>}
-          </button>
-          <div style={{ textAlign: 'right', marginTop: 10 }}>
-            <a href="#" onClick={e => { e.preventDefault(); forgotPassword(); }} style={{ fontSize: 12, color: 'var(--text-secondary)', textDecoration: 'underline' }}>
-              Forgot password?
-            </a>
-          </div>
+              <button className="btn-primary" disabled={busy || authStatus === 'loading'} onClick={attemptLogin}>
+                {busy ? 'Please wait…' : <>Sign In <ArrowRightIcon size={14} /></>}
+              </button>
+              <div style={{ textAlign: 'right', marginTop: 10 }}>
+                <a href="#" onClick={e => { e.preventDefault(); switchMode('forgot'); }} style={{ fontSize: 12, color: 'var(--text-secondary)', textDecoration: 'underline' }}>
+                  Forgot password?
+                </a>
+              </div>
+            </>
+          )}
           <div className="lc-note" style={{ marginTop: 12 }}>
             Use your <strong>@retrieve.am</strong> email. First time here? Use the link in your invitation email.<br />
             Contact Feliks for access issues.

@@ -84,4 +84,20 @@ export interface Credential {
 }
 
 export type Currency = 'USD' | 'EUR' | 'AMD';
+
+/** Firm profile + billing configuration (Settings), stored in firm_settings (migration 006). */
+export interface FirmSettings {
+  name: string;
+  website: string;
+  address: string;
+  phone: string;
+  email: string;
+  tin: string;
+  bank: string;
+  billingEmail: string;
+  vatRate: number;      // percent
+  paymentTerms: string;
+  fxAMD: number;        // 1 USD → AMD
+  fxEUR: number;        // 1 USD → EUR
+}
 export type SyncState = 'hidden' | 'syncing' | 'ok' | 'error';

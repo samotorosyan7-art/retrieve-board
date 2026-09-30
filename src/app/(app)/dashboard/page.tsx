@@ -1,9 +1,10 @@
 'use client';
 
+import { byDate } from '@/components/MatterFilters';
 import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
 import { AvStack, Photo, Tag, cardTitle } from '@/components/ui';
-import { canSeeMatter, firstWords, fmtShort, isOD, pri, sanitizeActivity, stat, utilColor, isOpen } from '@/lib/helpers';
+import { canSeeMatter, firstWords, fmtShort, isOD, isUrgent, pri, sanitizeActivity, stat, utilColor, isOpen } from '@/lib/helpers';
 import { ArrowRightIcon, PartyPopperIcon, TriangleAlertIcon } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -19,7 +20,8 @@ export default function DashboardPage() {
     { val: visible.filter(isOD).length, label: 'Overdue', sub: 'past due date', color: '#EF4444', href: 'list?stat=overdue' },
     { val: visible.filter(p => p.status === 'done').length, label: 'Completed', sub: 'all time', color: '#34D399', href: 'list?stat=done' },
   ];
-  const urgent = projects.filter(p => (isOD(p) || p.priority === 'high') && canSeeMatter(p, currentUser)).slice(0, 5);
+  // Same filter and order as the list "View all" opens, so these are its first five rows.
+  const urgent = visible.filter(isUrgent).sort(byDate('due', -1, '0000-01-01')).slice(0, 5);
   const activeFor = (id: string) => projects.filter(p => p.assignees.includes(id) && isOpen(p)).length;
   const maxM = Math.max(...team.map(e => activeFor(e.id)), 1);
 
@@ -27,13 +29,6 @@ export default function DashboardPage() {
   projects.forEach(p => { areaCt[p.area] = (areaCt[p.area] || 0) + 1; });
   const topAreas = Object.entries(areaCt).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const maxA = topAreas[0]?.[1] || 1;
-
-  // My open tasks — overdue first, then soonest deadline.
-  const myOpen = projects.filter(p => !!currentUser && p.assignees.includes(currentUser.id) && isOpen(p));
-  const myTasks = [...myOpen].sort((a, b) => {
-    if (isOD(a) !== isOD(b)) return isOD(a) ? -1 : 1;
-    return (a.due || '9999-12-31').localeCompare(b.due || '9999-12-31');
-  }).slice(0, 4);
 
   return (
     <div className="page active" id="page-dashboard">
@@ -63,7 +58,7 @@ export default function DashboardPage() {
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={cardTitle}>Urgent &amp; Overdue</div>
-              <button className="btn-ghost" style={{ fontSize: 11.5, padding: '4px 10px' }} onClick={() => go('list?sort=deadline-desc')}>View all <ArrowRightIcon size={12} /></button>
+              <button className="btn-ghost" style={{ fontSize: 11.5, padding: '4px 10px' }} onClick={() => go('list?stat=urgent&sort=deadline-desc')}>View all <ArrowRightIcon size={12} /></button>
             </div>
             {urgent.length ? urgent.map(p => {
               const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
@@ -139,27 +134,6 @@ export default function DashboardPage() {
                 </div>
               );
             })}
-          </div>
-
-          <div className="card">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <div style={cardTitle}>My Tasks</div>
-              <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>{myOpen.length} open</span>
-            </div>
-            {myTasks.length ? myTasks.map(p => {
-              const od = isOD(p);
-              return (
-                <div key={p.id} className="urgent-row" onClick={() => openPanel(p.id)}>
-                  <div className="urgent-dot" style={{ background: od ? '#F87171' : stat(p.status).col }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="urgent-title">{p.title}</div>
-                    <div className="urgent-client">{p.client}</div>
-                  </div>
-                  <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)' }}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtShort(p.due)}</div>
-                </div>
-              );
-            }) : <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No open tasks assigned to you <PartyPopperIcon size={13} /></div>}
-            <button className="btn-ghost" style={{ width: '100%', marginTop: 8, fontSize: 12 }} onClick={() => go('tasks')}>View my tasks <ArrowRightIcon size={12} /></button>
           </div>
         </div>
       </div>

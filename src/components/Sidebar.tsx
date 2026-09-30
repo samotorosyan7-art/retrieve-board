@@ -12,8 +12,7 @@ import type { LucideIcon } from 'lucide-react';
 type NavItem = { id: string; icon: LucideIcon; label: string; badge?: number; badgeStyle?: React.CSSProperties };
 
 export function Sidebar() {
-  const { currentUser, clients, projects, chatUnreadByRoom, search, setSearch, isDark, toggleTheme, logout } = useStore();
-  const chatUnread = Object.values(chatUnreadByRoom).reduce((a, b) => a + b, 0);
+  const { currentUser, projects, chatUnread, search, setSearch, isDark, toggleTheme, logout } = useStore();
   const { page, go } = useNav();
   const router = useRouter();
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -48,14 +47,14 @@ export function Sidebar() {
         <div className="sb-section">Overview</div>
         {!isAdmin && link(myTasks)}
         {link({ id: 'dashboard', icon: LayoutDashboardIcon, label: 'Dashboard' })}
+        {isAdmin && link(myTasks)}
         <div className="sb-section">Tasks</div>
         {link({ id: 'kanban', icon: SquareKanbanIcon, label: 'Kanban Board' })}
         {link({ id: 'list', icon: ListIcon, label: 'All Tasks' })}
         {link({ id: 'calendar', icon: CalendarIcon, label: 'Calendar' })}
-        {link({ id: 'clients', icon: Building2Icon, label: 'Clients', badge: clients.length, badgeStyle: { background: 'var(--s-done)' } })}
+        {link({ id: 'clients', icon: Building2Icon, label: 'Clients' })}
         {link({ id: 'team', icon: UsersIcon, label: 'Team Workload' })}
-        {link({ id: 'logs', icon: TimerIcon, label: 'Logs' })}
-        {isAdmin && link(myTasks)}
+        {isAdmin && link({ id: 'logs', icon: TimerIcon, label: 'Logs' })}
         {link({ id: 'chat', icon: MessagesSquareIcon, label: 'Team Chat', badge: chatUnread })}
         {isBilling && (
           <>

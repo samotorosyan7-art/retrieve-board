@@ -1,15 +1,15 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { DEFAULT_FX } from '@/lib/constants';
+import { CHAT_ROOMS, DEFAULT_FIRM } from '@/lib/constants';
 import {
-  loadAll, loadChatUnread, loadMessages, markChatRead, rowToActivity, rowToClient, rowToMember, rowToMessage, rowToProject, write, type Mutation,
+  loadAll, loadChatUnread, loadFirmSettings, loadMessages, markChatRead, saveFirmSettings, rowToActivity, rowToClient, rowToMember, rowToMessage, rowToProject, write, type Mutation,
 } from '@/lib/db';
 import { sendMatterAssignmentEmail } from '@/lib/email';
-import { canDeleteMatter, stat, today } from '@/lib/helpers';
+import { canDeleteMatter, dmRoom, stat, today } from '@/lib/helpers';
 import { getSupabase } from '@/lib/supabase';
 import type {
-  Activity, ChatMessage, Client, Currency, Member, Project, StatusId, SyncState, TimeLog,
+  Activity, ChatMessage, Client, Currency, FirmSettings, Member, Project, StatusId, SyncState, TimeLog,
 } from '@/lib/types';
 import { ArchiveIcon, GlobeIcon, LockIcon, MailIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -56,9 +56,13 @@ function useStoreValue() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [search, setSearch] = useState('');
   const [billingCurrency, setBillingCurrency] = useState<Currency>('USD');
-  const [fx, setFx] = useState<Record<Currency, number>>(DEFAULT_FX);
+  // Firm profile + billing config from Settings (migration 006); exchange rates come from it.
+  const [firm, setFirm] = useState<FirmSettings>(DEFAULT_FIRM);
+  const fx: Record<Currency, number> = { USD: 1, EUR: firm.fxEUR, AMD: firm.fxAMD };
   const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({});
   // Unread messages per room (channel id or dm_<a>__<b>), from chat_reads (migration 005) + live updates.
+  // Signed in from a password-reset link and hasn't chosen a new password yet (see /reset-password).
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [chatUnreadByRoom, setChatUnreadByRoom] = useState<Record<string, number>>({});
 
   const currentUser = (sessionEmail && team.find(e => e.email.toLowerCase() === sessionEmail)) || null;
@@ -75,6 +79,17 @@ function useStoreValue() {
   state.current = { projects, clients, currentUser, team };
   // The chat room currently on screen, if any — its messages are read as they arrive.
   const activeChatRoom = useRef<string | null>(null);
+
+  /** Take unread counts from the database. The open room is marked read instead. */
+  const refreshChatUnread = useCallback(() => {
+    loadChatUnread()
+      .then(counts => {
+        const open = activeChatRoom.current;
+        if (open && !document.hidden) { delete counts[open]; markChatRead(open).catch(() => {}); }
+        setChatUnreadByRoom(counts);
+      })
+      .catch(e => console.warn('Unread counts unavailable (has migration 005 been run?)', e));
+  }, []);
 
   /* ── Toasts ── */
   const toastSeq = useRef(0);
@@ -154,6 +169,8 @@ function useStoreValue() {
       }));
       setClients(data.clients);
       setActivity(data.activity);
+      // Separate from loadAll so the app still works before migration 006 is run.
+      loadFirmSettings().then(setFirm).catch(e => console.warn('Firm settings unavailable (has migration 006 been run?)', e));
     } catch (e) {
       console.warn('DB load error — using local cache', e);
       setSync('error');
@@ -169,10 +186,15 @@ function useStoreValue() {
       LEGACY_KEYS.forEach(k => { localStorage.removeItem(k); sessionStorage.removeItem(k); });
       if (localStorage.getItem(THEME_KEY) === 'light') setIsDark(false);
     } catch {}
+    // A password-reset link signs the user in; they must set a new password before going anywhere.
+    // Checked before the client reads the link (it clears the hash), and via its PASSWORD_RECOVERY event.
+    if (/type=recovery/.test(location.hash)) setPasswordRecovery(true);
     const sb = getSupabase();
     if (!sb) { setSessionEmail(null); return; }
     sb.auth.getSession().then(({ data }) => setSessionEmail(data.session?.user.email?.toLowerCase() ?? null));
-    const { data: sub } = sb.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = sb.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
+      if (event === 'SIGNED_OUT') setPasswordRecovery(false);
       setSessionEmail(session?.user.email?.toLowerCase() ?? null);
     });
     return () => sub.subscription.unsubscribe();
@@ -277,19 +299,14 @@ function useStoreValue() {
         if (activeChatRoom.current === msg.room && !document.hidden) markChatRead(msg.room).catch(() => {});
         else setChatUnreadByRoom(u => ({ ...u, [msg.room]: (u[msg.room] || 0) + 1 }));
       })
-      // On every (re)connect, take the counts from the database so nothing missed while offline is lost.
-      .subscribe(status => {
-        if (status !== 'SUBSCRIBED') return;
-        loadChatUnread()
-          .then(counts => {
-            const open = activeChatRoom.current;
-            if (open) { delete counts[open]; markChatRead(open).catch(() => {}); }
-            setChatUnreadByRoom(counts);
-          })
-          .catch(e => console.warn('Unread counts unavailable (has migration 005 been run?)', e));
-      });
-    return () => { sb.removeChannel(channel); };
-  }, [currentUserId]);
+      // On every (re)connect, re-read the counts so nothing missed while offline is lost.
+      .subscribe(status => { if (status === 'SUBSCRIBED') refreshChatUnread(); });
+    // Counts don't depend on realtime connecting; also re-read them whenever the tab comes back.
+    refreshChatUnread();
+    const onVisible = () => { if (!document.hidden) refreshChatUnread(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { sb.removeChannel(channel); document.removeEventListener('visibilitychange', onVisible); };
+  }, [currentUserId, refreshChatUnread]);
 
   /* ── Auth (Supabase Auth — passwords never touch this code) ── */
   /** Returns an error message, or null on success. */
@@ -310,6 +327,18 @@ function useStoreValue() {
   };
   /** Emails a link to /reset-password where the user sets a new password. */
   const sendPasswordEmail = async (email: string) => {
+    // Sent by our server through Resend (Supabase's built-in mailer allows only a few emails an hour).
+    try {
+      const res = await fetch('/api/auth/password-reset', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok) return null;
+      // 503 = server not configured (e.g. local dev without keys): fall back to Supabase's mailer below.
+      if (res.status !== 503) return typeof json.error === 'string' ? json.error : `Request failed (${res.status}).`;
+    } catch {
+      return 'Could not reach the server. Check your connection and try again.';
+    }
     const sb = getSupabase();
     if (!sb) return 'The app is not connected to the database.';
     const { error } = await sb.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
@@ -490,6 +519,17 @@ function useStoreValue() {
     setChatMessages(all => ({ ...all, [room]: [...(all[room] || []), optimistic] }));
     write({ type: 'message', entity: { room, who, text } }).catch(e => console.warn('Chat send error', e));
   };
+  /** Admin-only (enforced by RLS). Returns whether it saved. */
+  const saveFirm = async (next: FirmSettings) => {
+    try {
+      await saveFirmSettings(next);
+      setFirm(next);
+      return true;
+    } catch (e) {
+      console.warn('Firm settings save error', e);
+      return false;
+    }
+  };
   /** The chat page reports which room is open (null when it closes); that room counts as read. */
   const setActiveChatRoom = useCallback((room: string | null) => {
     activeChatRoom.current = room;
@@ -500,6 +540,13 @@ function useStoreValue() {
 
   /* ── Misc ── */
   const emp = (id: string) => team.find(e => e.id === id);
+  // Rooms listed on the chat page: channels this member may see, plus a DM with each teammate.
+  // The sidebar total only counts these, so it always matches the badges on the chat page.
+  const chatRoomIds = currentUser ? [
+    ...CHAT_ROOMS.filter(r => !r.billingOnly || currentUser.isBilling || currentUser.isAdmin).map(r => r.id),
+    ...team.filter(e => e.id !== currentUser.id).map(e => dmRoom(currentUser.id, e.id)),
+  ] : [];
+  const chatUnread = chatRoomIds.reduce((n, id) => n + (chatUnreadByRoom[id] || 0), 0);
   const openPanel = (id: string) => setSelectedPid(cur => (cur === id ? null : id));
   const clearSavedState = () => {
     localStorage.removeItem(CACHE_KEY);
@@ -509,8 +556,8 @@ function useStoreValue() {
 
   return {
     hydrated, authStatus, team, projects, clients, activity, isDark, currentUser, sync,
-    selectedPid, modal, toasts, confirmState, setConfirmState, search, billingCurrency, fx, chatMessages, chatUnreadByRoom,
-    setSearch, setBillingCurrency, setFx, setSelectedPid, setModal,
+    selectedPid, modal, toasts, confirmState, setConfirmState, search, billingCurrency, fx, chatMessages, chatUnreadByRoom, chatUnread,
+    firm, saveFirm, passwordRecovery, setPasswordRecovery, setSearch, setBillingCurrency, setSelectedPid, setModal,
     toggleTheme: () => setIsDark(d => !d),
     toast, login, logout, sendPasswordEmail, emp, openPanel, closePanel: () => setSelectedPid(null),
     closeModal: () => setModal(null),

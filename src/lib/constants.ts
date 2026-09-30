@@ -1,4 +1,4 @@
-import type { PriorityId, StatusId } from './types';
+import type { FirmSettings, PriorityId, StatusId } from './types';
 import { Building2Icon, CoffeeIcon, ReceiptIcon, ScaleIcon, SettingsIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -37,6 +37,24 @@ export const PAGE_LABELS: Record<string, string> = {
 };
 
 export const DEFAULT_FX = { USD: 1, EUR: 0.92, AMD: 390 }; // approximate rates — updated in Settings
+
+/** Used until firm_settings has loaded, and for any field it doesn't have yet. */
+export const DEFAULT_FIRM: FirmSettings = {
+  name: 'Retrieve Legal & Tax',
+  website: 'retrieve.am',
+  address: 'Baghramyan 41, Yerevan, Armenia',
+  phone: '+374 41 777 332',
+  email: 'info@retrieve.am',
+  tin: 'AM 1234567',
+  bank: 'Ameriabank OJSC · IBAN: AM12 3456 7890 1234 5678',
+  billingEmail: 'billing@retrieve.am',
+  vatRate: 20,
+  paymentTerms: 'Net 30 days',
+  fxAMD: DEFAULT_FX.AMD,
+  fxEUR: DEFAULT_FX.EUR,
+};
+
+export const PAYMENT_TERMS = ['Net 30 days', 'Net 15 days', 'Due on receipt'];
 export const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', AMD: '֏' };
 
 export const LOGO_SRC = '/logo.jpg';

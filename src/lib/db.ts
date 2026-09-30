@@ -1,5 +1,6 @@
+import { DEFAULT_FIRM } from './constants';
 import { getSupabase } from './supabase';
-import type { Activity, ChatMessage, Client, Member, Project } from './types';
+import type { Activity, ChatMessage, Client, FirmSettings, Member, Project } from './types';
 
 /* ── Row converters (DB snake_case ↔ app camelCase) ── */
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -120,6 +121,25 @@ export async function loadChatUnread(): Promise<Record<string, number>> {
 export async function markChatRead(room: string) {
   const { error } = await getSupabase()!.rpc('mark_chat_read', { room });
   if (error) throw error;
+}
+
+/** Firm profile + billing config (migration 006). Missing fields fall back to DEFAULT_FIRM. */
+export async function loadFirmSettings(): Promise<FirmSettings> {
+  const sb = getSupabase();
+  if (!sb) return DEFAULT_FIRM;
+  const { data, error } = await sb.from('firm_settings').select('data').eq('id', 'firm').maybeSingle();
+  if (error) throw error;
+  return { ...DEFAULT_FIRM, ...(data?.data || {}) };
+}
+
+export async function saveFirmSettings(firm: FirmSettings) {
+  const sb = getSupabase();
+  if (!sb) throw new Error('No database connection');
+  const { data, error } = await sb.from('firm_settings')
+    .upsert({ id: 'firm', data: firm, updated_at: new Date().toISOString() }).select('id');
+  if (error) throw error;
+  // Row-level security (non-admins) blocks the write silently.
+  if (!data?.length) throw new Error('Firm settings were not saved');
 }
 
 /* ── Writes ── */

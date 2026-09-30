@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/components/store';
 import { PageHeader, Photo } from '@/components/ui';
-import { BanknoteIcon, BellIcon, CalendarIcon, FileSignatureIcon, HardDriveIcon, LandmarkIcon, LinkIcon, LockIcon, MailIcon, PencilIcon, PlugIcon, PlusIcon, SaveIcon, SendIcon, SheetIcon, Trash2Icon, UsersIcon, EuroIcon } from 'lucide-react';
+import { PAYMENT_TERMS } from '@/lib/constants';
+import type { FirmSettings } from '@/lib/types';
+import { BanknoteIcon, BellIcon, CalendarIcon, FileSignatureIcon, HardDriveIcon, LandmarkIcon, LinkIcon, LockIcon, MailIcon, PencilIcon, PlugIcon, PlusIcon, SaveIcon, SendIcon, SheetIcon, Trash2Icon, TriangleAlertIcon, UsersIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 const PANELS = [
@@ -149,8 +151,42 @@ function IntegrationsPanel() {
   );
 }
 
+/** Draft copy of the firm settings; saved together with the panel's Save button. */
+function useFirmDraft(savedMsg: string) {
+  const { firm, saveFirm, toast } = useStore();
+  const [draft, setDraft] = useState<FirmSettings>(firm);
+  const [saving, setSaving] = useState(false);
+  // Settings arrive after the page opens: take them until the admin starts editing.
+  const [seeded, setSeeded] = useState(firm);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(firm);
+  if (seeded !== firm) { setSeeded(firm); if (!dirty) setDraft(firm); }
+
+  const text = (k: keyof FirmSettings) => ({
+    value: String(draft[k]),
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setDraft(d => ({ ...d, [k]: e.target.value })),
+  });
+  const num = (k: keyof FirmSettings) => ({
+    type: 'number', value: String(draft[k]),
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraft(d => ({ ...d, [k]: e.target.value === '' ? 0 : +e.target.value })),
+  });
+  async function save() {
+    setSaving(true);
+    const ok = await saveFirm(draft);
+    setSaving(false);
+    if (ok) toast(SaveIcon, 'Saved', savedMsg);
+    else toast(TriangleAlertIcon, 'Not saved', 'Could not save settings. Has migration 006 been run?');
+  }
+  const saveBtn = (
+    <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+      <button className="btn-solid" disabled={!dirty || saving} onClick={save}><SaveIcon size={14} /> {saving ? 'Saving…' : 'Save Changes'}</button>
+      {dirty && !saving && <button className="btn-ghost" onClick={() => setDraft(firm)}>Discard</button>}
+    </div>
+  );
+  return { text, num, saveBtn };
+}
+
 function BillingConfigPanel() {
-  const { fx, setFx, toast } = useStore();
+  const { text, num, saveBtn } = useFirmDraft('Billing config updated.');
   return (
     <>
       <div className="settings-section">
@@ -169,68 +205,48 @@ function BillingConfigPanel() {
       <div className="ss-divider" />
       <div className="settings-section">
         <div className="ss-title">Exchange Rates</div>
-        <div className="ss-sub">Used for AMD and EUR invoice display. Update as needed.</div>
+        <div className="ss-sub">Used for AMD and EUR invoice display.</div>
         <div className="form-grid">
-          <div className="form-row">
-            <label className="form-label">1 USD → AMD</label>
-            <input className="input" type="number" step={1} defaultValue={fx.AMD}
-              onChange={e => { setFx(f => ({ ...f, AMD: +e.target.value })); }}
-              onBlur={() => toast(BanknoteIcon, 'Rate updated', 'AMD rate set.')} />
-          </div>
-          <div className="form-row">
-            <label className="form-label">1 USD → EUR</label>
-            <input className="input" type="number" step={0.01} defaultValue={fx.EUR}
-              onChange={e => { setFx(f => ({ ...f, EUR: +e.target.value })); }}
-              onBlur={() => toast(EuroIcon, 'Rate updated', 'EUR rate set.')} />
-          </div>
+          <div className="form-row"><label className="form-label">1 USD → AMD</label><input className="input" step={1} min={0} {...num('fxAMD')} /></div>
+          <div className="form-row"><label className="form-label">1 USD → EUR</label><input className="input" step={0.01} min={0} {...num('fxEUR')} /></div>
         </div>
       </div>
       <div className="ss-divider" />
       <div className="settings-section">
         <div className="ss-title">Invoice Defaults</div>
+        <div className="ss-sub">Shown on every invoice.</div>
         <div className="form-grid">
-          <div className="form-row"><label className="form-label">VAT Rate (%)</label><input className="input" type="number" defaultValue={20} /></div>
+          <div className="form-row"><label className="form-label">VAT Rate (%)</label><input className="input" step={0.5} min={0} max={100} {...num('vatRate')} /></div>
           <div className="form-row">
             <label className="form-label">Payment Terms</label>
-            <select className="input sel"><option>Net 30 days</option><option>Net 15 days</option><option>Due on receipt</option></select>
+            <select className="input sel" {...text('paymentTerms')}>{PAYMENT_TERMS.map(t => <option key={t}>{t}</option>)}</select>
           </div>
         </div>
-        <button className="btn-solid" style={{ marginTop: 4 }} onClick={() => toast(SaveIcon, 'Saved', 'Billing config updated.')}>Save Changes</button>
+        <div className="form-row"><label className="form-label">Billing Contact Email</label><input className="input" type="email" {...text('billingEmail')} /></div>
+        <div className="form-row">
+          <label className="form-label">Bank Details</label>
+          <textarea className="input" rows={2} {...text('bank')} />
+        </div>
+        {saveBtn}
       </div>
     </>
   );
 }
 
 function FirmPanel() {
-  const { toast, clearSavedState } = useStore();
-  const field = (label: string, value: string) => (
-    <div className="form-row"><label className="form-label">{label}</label><input className="input" defaultValue={value} /></div>
+  const { text, saveBtn } = useFirmDraft('Firm profile updated.');
+  const field = (label: string, k: keyof FirmSettings) => (
+    <div className="form-row"><label className="form-label">{label}</label><input className="input" {...text(k)} /></div>
   );
   return (
     <div className="settings-section">
       <div className="ss-title">Firm Profile</div>
       <div className="ss-sub">Details shown on invoices and client-facing documents.</div>
-      <div className="form-grid">{field('Firm Name', 'Retrieve Legal & Tax')}{field('Website', 'retrieve.am')}</div>
-      {field('Address', 'Baghramyan 41, Yerevan, Armenia')}
-      <div className="form-grid">{field('Phone', '+374 41 777 332')}{field('Email', 'info@retrieve.am')}</div>
-      {field('TIN / Tax ID', 'AM 1234567')}
-      <div className="form-row">
-        <label className="form-label">Bank Details</label>
-        <textarea className="input" rows={2} defaultValue="Ameriabank OJSC · IBAN: AM12 3456 7890 1234 5678" />
-      </div>
-      <button className="btn-solid" style={{ marginTop: 4 }} onClick={() => toast(SaveIcon, 'Saved', 'Firm profile updated.')}>Save Changes</button>
-      <div className="ss-divider" />
-      <div className="settings-section">
-        <div className="ss-title">Data Management</div>
-        <div className="ss-sub">All changes are saved to the shared database, with a copy cached in this browser for instant loading.</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 'var(--r-lg)', marginTop: 8 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--p-high)' }}>Clear Local Cache</div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Wipes this browser&apos;s cached copy and reloads from the database.</div>
-          </div>
-          <button className="dp-action-btn danger" style={{ width: 'auto', padding: '7px 16px' }} onClick={clearSavedState}>Reset</button>
-        </div>
-      </div>
+      <div className="form-grid">{field('Firm Name', 'name')}{field('Website', 'website')}</div>
+      {field('Address', 'address')}
+      <div className="form-grid">{field('Phone', 'phone')}{field('Email', 'email')}</div>
+      {field('TIN / Tax ID', 'tin')}
+      {saveBtn}
     </div>
   );
 }

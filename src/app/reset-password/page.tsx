@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LOGO_SRC } from '@/lib/constants';
 import { getSupabase } from '@/lib/supabase';
@@ -11,7 +11,7 @@ const MIN_LENGTH = 8;
 
 /** Landing page for invitation and password-reset emails; also used to change your password while signed in. */
 export default function ResetPasswordPage() {
-  const { authStatus, currentUser } = useStore();
+  const { authStatus, currentUser, setPasswordRecovery } = useStore();
   const router = useRouter();
   const [linkError, setLinkError] = useState('');
   const [pass, setPass] = useState('');
@@ -20,14 +20,28 @@ export default function ResetPasswordPage() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
 
-  // Supabase puts link problems in the URL hash, e.g. #error_description=Email+link+is+invalid+or+has+expired
+  // Our emails link here with ?token_hash=…&type=recovery|invite; confirming it signs the member in.
+  const [verifying, setVerifying] = useState(true);
+  const started = useRef(false);
   useEffect(() => {
-    const params = new URLSearchParams(location.hash.slice(1));
-    const desc = params.get('error_description');
+    if (started.current) return;
+    started.current = true;
+    const q = new URLSearchParams(location.search);
+    const token_hash = q.get('token_hash'), type = q.get('type');
+    // Supabase's own links put problems in the hash, e.g. #error_description=Email+link+is+invalid+or+has+expired
+    const desc = new URLSearchParams(location.hash.slice(1)).get('error_description');
     if (desc) setLinkError(desc.replace(/\+/g, ' '));
-  }, []);
+    if (!token_hash || (type !== 'recovery' && type !== 'invite')) { setVerifying(false); return; }
+    // The token works once: drop it from the address bar (and history) before using it.
+    history.replaceState(null, '', location.pathname);
+    getSupabase()!.auth.verifyOtp({ token_hash, type }).then(({ error }) => {
+      if (error) setLinkError(error.message);
+      else setPasswordRecovery(true);
+      setVerifying(false);
+    });
+  }, [setPasswordRecovery]);
 
-  const signedIn = authStatus === 'signedIn' || authStatus === 'noAccess';
+  const signedIn = !linkError && (authStatus === 'signedIn' || authStatus === 'noAccess');
 
   async function submit() {
     if (pass.length < MIN_LENGTH) { setError(`Use at least ${MIN_LENGTH} characters.`); return; }
@@ -37,6 +51,7 @@ export default function ResetPasswordPage() {
     setBusy(false);
     if (error) { setError(error.message); return; }
     setDone(true);
+    setPasswordRecovery(false);
     setTimeout(() => router.replace(currentUser?.isAdmin ? '/dashboard' : '/tasks'), 1200);
   }
 
@@ -51,7 +66,7 @@ export default function ResetPasswordPage() {
           <div className="lc-title">Set your password</div>
           <div className="lc-sub">Retrieve Legal &amp; Tax · Internal Platform</div>
 
-          {authStatus === 'loading' ? (
+          {verifying || authStatus === 'loading' ? (
             <div className="lc-note">Checking your link…</div>
           ) : !signedIn ? (
             <>

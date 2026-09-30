@@ -72,8 +72,8 @@ export default function ChatPage() {
               </div>
             ))}
           </div>
-          <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Direct Messages</div>
+          <div className="chat-sb-hdr chat-dm-hdr">Direct Messages</div>
+          <div className="chat-dm-list">
             {team.filter(e => e.id !== currentUser?.id).map(e => (
               <div key={e.id} className={`chat-room-row${room === dmRoom(currentUser!.id, e.id) ? ' active' : ''}`} onClick={() => setRoom(dmRoom(currentUser!.id, e.id))}>
                 <div className="chat-msg-av" style={{ width: 22, height: 22, fontSize: 9, background: e.color }}>{e.init}</div>
@@ -108,10 +108,10 @@ export default function ChatPage() {
                       {showDate && <div className="chat-date-divider">{dateStr}</div>}
                       <div className={`chat-msg${isOwn ? ' own' : ''}`}>
                         <div className="chat-msg-av" style={{ background: e?.color || '#64748B' }} title={e?.name || 'Unknown'}>
-                          <Photo src={e?.img} style={{ position: 'absolute', inset: 0 }} />
+                          <Photo src={e?.img} />
                           {e?.init || '?'}
                         </div>
-                        <div>
+                        <div className="chat-msg-body">
                           <div className="chat-bubble">{m.text}</div>
                           <div className="chat-msg-meta">
                             {!isOwn && <><span>{e?.name.split(' ')[0] || ''}</span>·</>}

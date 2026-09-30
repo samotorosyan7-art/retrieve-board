@@ -12,6 +12,9 @@ export const parseDate = (d: string) => {
 /** Still open work — not Completed and not Archived. */
 export const isOpen = (p: Project) => p.status !== 'done' && p.status !== 'archive';
 
+/** Dashboard "Urgent & Overdue": open and either overdue or high priority. */
+export const isUrgent = (p: Project) => isOpen(p) && (p.priority === 'high' || isOD(p));
+
 export const isOD = (p: Project) => {
   if (p.status === 'done' || p.status === 'archive' || !p.due) return false;
   const d = parseDate(p.due);

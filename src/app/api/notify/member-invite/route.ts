@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { sendLoginEmail } from '@/lib/mail-server';
+import { sendLoginEmail, setPasswordLink } from '@/lib/mail-server';
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://lvtipqzcupegawhufzsw.supabase.co';
 const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY || 'sb_publishable_J8YC4rtR3fqhkSFFG5cBJg_FRP0jmN7';
@@ -46,12 +46,12 @@ export async function POST(req: Request) {
     isNew = false;
     res = await admin.auth.admin.generateLink({ type: 'recovery', email, options: { redirectTo } });
   }
-  if (res.error || !res.data.properties?.action_link) {
+  if (res.error || !res.data.properties?.hashed_token) {
     console.error('generateLink failed', res.error);
     return NextResponse.json({ error: res.error?.message || 'Could not create a sign-in link.' }, { status: 500 });
   }
 
-  const ok = await sendLoginEmail({ to, link: res.data.properties.action_link, isNew, invitedBy: sender.name });
+  const ok = await sendLoginEmail({ to, link: setPasswordLink(APP_URL, res.data.properties), isNew, invitedBy: sender.name });
   if (!ok) return NextResponse.json({ error: 'The email service rejected the message.' }, { status: 502 });
   return NextResponse.json({ sent: true, isNew });
 }

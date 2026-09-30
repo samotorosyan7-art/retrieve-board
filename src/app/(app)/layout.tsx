@@ -10,16 +10,18 @@ import { ModalHost } from '@/components/modals/ModalHost';
 import { ConfirmDialog } from '@/components/modals/ConfirmDialog';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { authStatus } = useStore();
+  const { authStatus, passwordRecovery } = useStore();
   const router = useRouter();
 
   useEffect(() => {
     // Signed-out visitors return here after signing in (e.g. from a copied task link).
     if (authStatus === 'signedOut') router.replace('/?next=' + encodeURIComponent(location.pathname + location.search));
     if (authStatus === 'noAccess') router.replace('/');
-  }, [authStatus, router]);
+    // Signed in from a password-reset link: set the new password before using the app.
+    if (passwordRecovery) router.replace('/reset-password');
+  }, [authStatus, passwordRecovery, router]);
 
-  if (authStatus !== 'signedIn') return null;
+  if (authStatus !== 'signedIn' || passwordRecovery) return null;
 
   return (
     <>

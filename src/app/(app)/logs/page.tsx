@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useStore } from '@/components/store';
 import { Av, PageHeader } from '@/components/ui';
 import { canSeeMatter, fmtDate, today } from '@/lib/helpers';
 import type { Project, TimeLog } from '@/lib/types';
-import { XIcon } from 'lucide-react';
+import { LockIcon, XIcon } from 'lucide-react';
 
 type Row = TimeLog & { p: Project; key: string };
 type Filters = { from: string; to: string; who: string; client: string; q: string };
@@ -25,8 +26,16 @@ const openPicker = (e: React.MouseEvent<HTMLInputElement>) => {
 };
 
 export default function LogsPage() {
-  const { projects, team, emp, currentUser, openPanel, search } = useStore();
+  const { projects, team, emp, currentUser, openPanel, search, toast } = useStore();
+  const router = useRouter();
   const [f, setF] = useState<Filters>(EMPTY);
+
+  useEffect(() => {
+    if (!currentUser?.isAdmin) {
+      toast(LockIcon, 'Access denied', 'Time logs are admin-only.');
+      router.replace('/dashboard');
+    }
+  }, [currentUser, router, toast]);
   const set = (k: keyof Filters) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(x => ({ ...x, [k]: e.target.value }));
 
   const visible = projects.filter(p => canSeeMatter(p, currentUser));
@@ -46,6 +55,8 @@ export default function LogsPage() {
     .filter(x => x.h > 0)
     .sort((a, b) => b.h - a.h);
   const clientNames = [...new Set(visible.map(p => p.client).filter(Boolean))].sort();
+
+  if (!currentUser?.isAdmin) return null;
 
   return (
     <div className="page active" id="page-logs">

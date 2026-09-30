@@ -10,12 +10,11 @@ import type { Currency } from '@/lib/types';
 import { CopyIcon, FileTextIcon, LockIcon, MailIcon, PencilIcon, PrinterIcon, Share2Icon, TriangleAlertIcon } from 'lucide-react';
 
 const MONTHS = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const VAT = 0.2;
 
 type Entry = { who: string; hours: number; desc: string; matter: string; empName: string };
 
 export default function BillingPage() {
-  const { currentUser, projects, emp, billingCurrency, setBillingCurrency, fx, toast } = useStore();
+  const { currentUser, projects, emp, billingCurrency, setBillingCurrency, fx, firm, toast } = useStore();
   const router = useRouter();
   const allowed = !!(currentUser?.isBilling || currentUser?.isAdmin);
   const [month, setMonth] = useState(3);
@@ -83,7 +82,7 @@ export default function BillingPage() {
             <div style={{ fontFamily: 'var(--font-sans)', fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text-primary)' }}>{monthHours}h logged</div>
             {active && (
               <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                {invoiceTotal > 0 ? `${active[0]}: ${fmtBill(invoiceTotal, billingCurrency, fx)} incl. 20% VAT` : 'Enter rates to calculate'}
+                {invoiceTotal > 0 ? `${active[0]}: ${fmtBill(invoiceTotal, billingCurrency, fx)} incl. ${firm.vatRate}% VAT` : 'Enter rates to calculate'}
               </div>
             )}
           </div>
@@ -99,7 +98,7 @@ export default function BillingPage() {
 }
 
 function Invoice({ client, entries, month, onTotal }: { client: string; entries: Entry[]; month: number; onTotal: (v: number) => void }) {
-  const { billingCurrency, fx, toast } = useStore();
+  const { billingCurrency, fx, firm, toast } = useStore();
   const [rates, setRates] = useState<Record<number, string>>({});
   const invNum = useMemo(() => `INV-${String(month).padStart(2, '0')}-2026-${Math.floor(Math.random() * 900 + 100)}`, [month]);
   const ref = useRef<HTMLDivElement>(null);
@@ -107,7 +106,7 @@ function Invoice({ client, entries, month, onTotal }: { client: string; entries:
 
   const amounts = entries.map((e, i) => e.hours * (parseFloat(rates[i]) || 0));
   const sub = amounts.reduce((s, a) => s + a, 0);
-  const tax = sub * VAT, total = sub + tax;
+  const tax = sub * (firm.vatRate / 100), total = sub + tax;
 
   useEffect(() => { onTotal(total); }, [total, onTotal]);
 
@@ -147,8 +146,8 @@ function Invoice({ client, entries, month, onTotal }: { client: string; entries:
         <div className="inv-from">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={LOGO_SRC} alt="" style={{ height: 42, width: 'auto', objectFit: 'contain', marginBottom: 10, display: 'block' }} />
-          <div className="inv-firm">Retrieve Legal &amp; Tax</div>
-          <div className="inv-detail">Baghramyan 41, Yerevan, Armenia<br />info@retrieve.am · +374 41 777 332<br />TIN: AM 1234567</div>
+          <div className="inv-firm">{firm.name}</div>
+          <div className="inv-detail">{firm.address}<br />{[firm.email, firm.phone].filter(Boolean).join(' · ')}{firm.tin && <><br />TIN: {firm.tin}</>}</div>
         </div>
         <div className="inv-to-block">
           <div className="inv-label">Invoice</div>
@@ -159,7 +158,7 @@ function Invoice({ client, entries, month, onTotal }: { client: string; entries:
       </div>
       <div className="inv-client-block">
         <div><div className="icb-to">Billed to</div><div className="icb-name">{client}</div></div>
-        <div className="icb-date">{MONTHS[month]} 2026<br />Due Net 30 days</div>
+        <div className="icb-date">{MONTHS[month]} 2026<br />Due {firm.paymentTerms}</div>
       </div>
       <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-lg)', overflow: 'hidden', marginBottom: 14 }}>
         <table className="inv-tbl">
@@ -191,7 +190,7 @@ function Invoice({ client, entries, month, onTotal }: { client: string; entries:
       <div className="inv-totals">
         <div className="inv-totals-block">
           <div className="inv-tot-row"><span className="inv-tot-label">Subtotal</span><span className="inv-tot-val">{fmt(sub)}</span></div>
-          <div className="inv-tot-row"><span className="inv-tot-label">RA VAT (20%)</span><span className="inv-tot-val">{fmt(tax)}</span></div>
+          <div className="inv-tot-row"><span className="inv-tot-label">RA VAT ({firm.vatRate}%)</span><span className="inv-tot-val">{fmt(tax)}</span></div>
           <div className="inv-tot-row final"><span className="inv-tot-label">Total Due ({billingCurrency})</span><span className="inv-tot-val">{fmt(total)}</span></div>
         </div>
       </div>
@@ -201,7 +200,7 @@ function Invoice({ client, entries, month, onTotal }: { client: string; entries:
         <button className="btn-outline" onClick={() => toast(CopyIcon, 'Copied', 'Invoice link copied.')}><Share2Icon size={14} /> Share</button>
       </div>
       <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 12, lineHeight: 1.7 }}>
-        Payment terms: Net 30 days. Bank transfer via Ameriabank or ARCA. Questions: billing@retrieve.am
+        Payment terms: {firm.paymentTerms}.{firm.bank && <> Bank transfer: {firm.bank}.</>}{firm.billingEmail && <> Questions: {firm.billingEmail}</>}
       </div>
     </div>
   );

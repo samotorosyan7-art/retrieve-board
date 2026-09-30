@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AREAS, MATTER_TYPES, PRIORITIES, STATUSES } from '@/lib/constants';
-import { canSeeMatter, firstWords, isOD, isOpen } from '@/lib/helpers';
+import { canSeeMatter, firstWords, isOD, isOpen, isUrgent } from '@/lib/helpers';
 import type { Project } from '@/lib/types';
 import { useStore } from './store';
 import { XIcon } from 'lucide-react';
@@ -11,16 +11,17 @@ import { XIcon } from 'lucide-react';
 type Filters = { client: string; type: string; emp: string; area: string; pri: string; stat: string; sort: string };
 const EMPTY: Filters = { client: '', type: '', emp: '', area: '', pri: '', stat: '', sort: '' };
 
-const byDate = (key: 'due' | 'created', dir: 1 | -1, fallback: string) =>
+export const byDate = (key: 'due' | 'created', dir: 1 | -1, fallback: string) =>
   (a: Project, b: Project) => dir * (new Date(a[key] || fallback).getTime() - new Date(b[key] || fallback).getTime());
 
 /** Filters seeded from the URL, e.g. /list?emp=<id> (Team Workload), /list?stat=overdue (Dashboard KPIs), /list?sort=deadline-desc. */
 const fromParams = (q: URLSearchParams): Filters =>
   ({ ...EMPTY, emp: q.get('emp') || '', stat: q.get('stat') || '', pri: q.get('pri') || '', sort: q.get('sort') || '' });
 
-/** Status filter values beyond the real statuses: 'open' = not completed/archived, 'overdue' = open and past due. */
+/** Status filter values beyond the real statuses: 'open' = not completed/archived, 'overdue' = open and past due,
+ *  'urgent' = the dashboard's Urgent & Overdue (open and overdue or high priority). */
 const matchesStat = (p: Project, stat: string) =>
-  stat === 'open' ? isOpen(p) : stat === 'overdue' ? isOD(p) : p.status === stat;
+  stat === 'open' ? isOpen(p) : stat === 'overdue' ? isOD(p) : stat === 'urgent' ? isUrgent(p) : p.status === stat;
 
 /** Filter state + the visible, filtered, sorted matter list (Kanban and List pages). All filters combine (AND). */
 export function useMatterFilters() {
@@ -92,6 +93,7 @@ export function MatterFilterRow({
           <option value="">All statuses</option>
           <option value="open">Open (not completed)</option>
           <option value="overdue">Overdue</option>
+          <option value="urgent">Urgent &amp; overdue</option>
           {STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
       )}
