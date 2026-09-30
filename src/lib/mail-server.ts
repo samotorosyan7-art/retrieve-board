@@ -45,3 +45,28 @@ export async function sendMatterEmail(opts: {
   if (error) console.error('Resend failed', error);
   return !error;
 }
+
+/** Email a sign-in link to a team member: an invitation for a new login, or a password reset for an existing one. */
+export async function sendLoginEmail(opts: { to: { name: string; email: string }; link: string; isNew: boolean; invitedBy: string }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return false;
+  const { to, link, isNew, invitedBy } = opts;
+  const first = to.name.split(' ')[0];
+  const intro = isNew
+    ? `${invitedBy} added you to Retrieve PM, the firm's task and time tracking platform. Choose a password to sign in.`
+    : `${invitedBy} sent you a link to set a new password for Retrieve PM.`;
+  const cta = isNew ? 'Set your password' : 'Set a new password';
+  const subject = isNew ? 'You’re invited to Retrieve PM' : 'Set your Retrieve PM password';
+
+  const html = `<div style="font-family:system-ui,sans-serif;max-width:520px;color:#1a1a1a">
+  <p>Hi ${esc(first)},</p>
+  <p>${esc(intro)}</p>
+  <p style="margin:24px 0"><a href="${esc(link)}" style="background:#1B4F72;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;display:inline-block">${cta} →</a></p>
+  <p style="font-size:13px;color:#666">Sign in with this email address (${esc(to.email)}). The link works once and expires after a while; if it no longer works, ask an admin to send a new one.</p>
+</div>`;
+  const text = `Hi ${first},\n\n${intro}\n\n${cta}: ${link}\n\nSign in with this email address (${to.email}). The link works once; if it no longer works, ask an admin to send a new one.`;
+
+  const { error } = await new Resend(key).emails.send({ from: FROM, to: to.email, subject, html, text });
+  if (error) console.error('Resend failed', error);
+  return !error;
+}

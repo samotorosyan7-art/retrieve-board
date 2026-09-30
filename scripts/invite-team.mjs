@@ -4,7 +4,9 @@
 //   node --env-file=.env.local scripts/invite-team.mjs          # send invites
 //   node --env-file=.env.local scripts/invite-team.mjs --dry    # just list who would be invited
 //
-// Needs in .env.local (never commit it, never add the service key to Vercel):
+// Admins can also invite one person at a time from the Team page (Add Member / Send login email).
+//
+// Needs in .env.local (never commit it):
 //   SUPABASE_SERVICE_ROLE_KEY=...   (Supabase → Project Settings → API Keys → secret / service_role)
 //   APP_URL=https://your-app.vercel.app
 import { createClient } from '@supabase/supabase-js';

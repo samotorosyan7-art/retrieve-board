@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { Member } from '@/lib/types';
+import { sendMemberInvite } from '@/lib/email';
 import { useStore } from '../store';
 import { ModalFooter, ModalHeader } from './ModalHost';
 import { CircleCheckIcon, MailIcon, TriangleAlertIcon } from 'lucide-react';
@@ -9,7 +10,7 @@ import { CircleCheckIcon, MailIcon, TriangleAlertIcon } from 'lucide-react';
 type Access = 'member' | 'assistant' | 'billing' | 'admin';
 
 export function MemberModal({ id }: { id: string | null }) {
-  const { team, saveMember, sendPasswordEmail, toast, closeModal } = useStore();
+  const { team, saveMember, toast, closeModal } = useStore();
   const e = id ? team.find(x => x.id === id) : undefined;
   const [name, setName] = useState(e?.name || '');
   const [init, setInit] = useState(e?.init || '');
@@ -22,6 +23,7 @@ export function MemberModal({ id }: { id: string | null }) {
     e?.isAdmin ? 'admin' : e?.isAdmin_assistant ? 'assistant' : e?.isBilling ? 'billing' : 'member',
   );
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
 
   async function submit() {
     const n = name.trim(), r = role.trim(), em = email.trim().toLowerCase();
@@ -39,18 +41,26 @@ export function MemberModal({ id }: { id: string | null }) {
     };
     setBusy(true);
     const ok = await saveMember(member);
-    setBusy(false);
-    if (!ok) return;
-    if (e) toast(CircleCheckIcon, 'Member updated', n);
-    else toast(CircleCheckIcon, 'Member added', `Now invite ${em} from Supabase → Authentication → Users → Invite user.`);
+    if (!ok) { setBusy(false); return; }
+    if (e) {
+      setBusy(false);
+      toast(CircleCheckIcon, 'Member updated', n);
+    } else {
+      const err = await sendMemberInvite(member.id);
+      setBusy(false);
+      if (err) toast(TriangleAlertIcon, 'Member added, invite not sent', `${err} Open the member later and use “Send login email”.`);
+      else toast(MailIcon, 'Member added', `Invitation sent to ${em}.`);
+    }
     closeModal();
   }
 
   async function sendLink() {
     if (!e) return;
-    const err = await sendPasswordEmail(e.email);
+    setSending(true);
+    const err = await sendMemberInvite(e.id);
+    setSending(false);
     if (err) toast(TriangleAlertIcon, 'Email not sent', err);
-    else toast(MailIcon, 'Email sent', `${e.name.split(' ')[0]} will receive a link to set a new password.`);
+    else toast(MailIcon, 'Email sent', `${e.name.split(' ')[0]} will receive a link to set their password.`);
   }
 
   return (
@@ -92,15 +102,15 @@ export function MemberModal({ id }: { id: string | null }) {
           <div>
             <label className="form-label">Password</label>
             {e ? (
-              <button type="button" className="btn-outline" style={{ width: '100%' }} onClick={sendLink}><MailIcon size={14} /> Send password email</button>
+              <button type="button" className="btn-outline" style={{ width: '100%' }} onClick={sendLink} disabled={sending}><MailIcon size={14} /> {sending ? 'Sending…' : 'Send login email'}</button>
             ) : (
               <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', lineHeight: 1.5, paddingTop: 6 }}>
-                After saving, invite this email from Supabase → Authentication so they can set a password.
+                They’ll get an email invitation to set a password when you add them.
               </div>
             )}
           </div>
         </div>
-        <ModalFooter label={busy ? 'Saving…' : e ? 'Save Changes' : 'Add Member'} onSubmit={submit} />
+        <ModalFooter label={busy ? (e ? 'Saving…' : 'Adding & inviting…') : e ? 'Save Changes' : 'Add Member'} onSubmit={submit} />
       </div>
     </>
   );
