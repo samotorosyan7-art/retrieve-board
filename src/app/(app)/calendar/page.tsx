@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useStore } from '@/components/store';
 import { AvStack, PageHeader, Tag, cardTitle, muted } from '@/components/ui';
-import { canSeeMatter, fmtDate, isOD, pri, stat, isOpen } from '@/lib/helpers';
+import { canSeeMatter, fmtDate, isOD, pri, stat, isOpen, parseDate } from '@/lib/helpers';
 import type { Project } from '@/lib/types';
 import { ChevronLeftIcon, ChevronRightIcon, ClipboardListIcon, TriangleAlertIcon } from 'lucide-react';
 
@@ -26,8 +26,10 @@ export default function CalendarPage() {
   const byDate: Record<number, Project[]> = {};
   projects.forEach(p => { if (p.due && canSeeMatter(p, currentUser) && inMonth(p.due)) (byDate[new Date(p.due).getDate()] ||= []).push(p); });
 
+  // Upcoming = due today or later; past deadlines stay on the calendar grid only.
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const deadlines = projects
-    .filter(p => p.due && isOpen(p) && canSeeMatter(p, currentUser) && inMonth(p.due))
+    .filter(p => p.due && isOpen(p) && canSeeMatter(p, currentUser) && inMonth(p.due) && parseDate(p.due)! >= startOfToday)
     .sort((a, b) => new Date(a.due).getTime() - new Date(b.due).getTime());
 
   return (
@@ -78,7 +80,7 @@ export default function CalendarPage() {
                 <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtDate(p.due)}</div>
               </div>
             );
-          }) : <div style={muted}>No deadlines this month.</div>}
+          }) : <div style={muted}>No upcoming deadlines this month.</div>}
         </div>
       </div>
     </div>

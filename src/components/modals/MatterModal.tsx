@@ -21,8 +21,8 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
   const [notes, setNotes] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
 
-  const toggleAssign = (id: string) =>
-    setAssignees(a => (a.includes(id) ? a.filter(x => x !== id) : [...a, id]));
+  // One assignee per task: picking someone replaces the previous pick; clicking them again clears it.
+  const toggleAssign = (id: string) => setAssignees(a => (a.includes(id) ? [] : [id]));
 
   function submit() {
     if (!title.trim() || !client.trim()) { toast(TriangleAlertIcon, 'Missing info', 'Title and client are required.'); return; }
@@ -73,7 +73,7 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
         </div>
         <div><label className="form-label">Due Date</label><input className="input" type="date" value={due} onChange={e => setDue(e.target.value)} /></div>
         <div>
-          <label className="form-label">Assign Team Members</label>
+          <label className="form-label">Assign To</label>
           <div className="assign-row">
             {team.map(e => (
               <div key={e.id} className={`assign-chip${assignees.includes(e.id) ? ' sel' : ''}`} onClick={() => toggleAssign(e.id)}>

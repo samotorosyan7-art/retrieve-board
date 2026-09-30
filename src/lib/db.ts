@@ -107,6 +107,21 @@ export async function loadMessages(roomId: string) {
   return (data || []).map(rowToMessage);
 }
 
+/** Unread messages per room for the signed-in member (migration 005). */
+export async function loadChatUnread(): Promise<Record<string, number>> {
+  const sb = getSupabase();
+  if (!sb) return {};
+  const { data, error } = await sb.rpc('chat_unread_counts');
+  if (error) throw error;
+  return Object.fromEntries(((data || []) as { room_id: string; unread: number }[]).map(r => [r.room_id, Number(r.unread)]));
+}
+
+/** Record that the signed-in member has read everything in a room up to now. */
+export async function markChatRead(room: string) {
+  const { error } = await getSupabase()!.rpc('mark_chat_read', { room });
+  if (error) throw error;
+}
+
 /* ── Writes ── */
 export type Mutation =
   | { type: 'project'; entity: Project }

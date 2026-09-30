@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AREAS, MATTER_TYPES, PRIORITIES, STATUSES } from '@/lib/constants';
 import { canSeeMatter, firstWords, isOD, isOpen } from '@/lib/helpers';
 import type { Project } from '@/lib/types';
@@ -13,12 +14,9 @@ const EMPTY: Filters = { client: '', type: '', emp: '', area: '', pri: '', stat:
 const byDate = (key: 'due' | 'created', dir: 1 | -1, fallback: string) =>
   (a: Project, b: Project) => dir * (new Date(a[key] || fallback).getTime() - new Date(b[key] || fallback).getTime());
 
-/** Filters seeded from the URL, e.g. /list?emp=<id> (Team Workload) or /list?stat=overdue (Dashboard KPIs). The app only renders client-side. */
-const fromUrl = (): Filters => {
-  if (typeof window === 'undefined') return EMPTY;
-  const q = new URLSearchParams(window.location.search);
-  return { ...EMPTY, emp: q.get('emp') || '', stat: q.get('stat') || '', pri: q.get('pri') || '' };
-};
+/** Filters seeded from the URL, e.g. /list?emp=<id> (Team Workload), /list?stat=overdue (Dashboard KPIs), /list?sort=deadline-desc. */
+const fromParams = (q: URLSearchParams): Filters =>
+  ({ ...EMPTY, emp: q.get('emp') || '', stat: q.get('stat') || '', pri: q.get('pri') || '', sort: q.get('sort') || '' });
 
 /** Status filter values beyond the real statuses: 'open' = not completed/archived, 'overdue' = open and past due. */
 const matchesStat = (p: Project, stat: string) =>
@@ -27,7 +25,13 @@ const matchesStat = (p: Project, stat: string) =>
 /** Filter state + the visible, filtered, sorted matter list (Kanban and List pages). All filters combine (AND). */
 export function useMatterFilters() {
   const { projects, currentUser, search } = useStore();
-  const [f, setF] = useState<Filters>(fromUrl);
+  // useSearchParams, not window.location: on in-app navigation the new page renders before the address bar updates.
+  const params = useSearchParams();
+  const [f, setF] = useState<Filters>(() => fromParams(params));
+  // A new URL (e.g. another dashboard link) re-seeds the filters.
+  const qs = params.toString();
+  const [seededFrom, setSeededFrom] = useState(qs);
+  if (seededFrom !== qs) { setSeededFrom(qs); setF(fromParams(params)); }
   const q = search.toLowerCase();
 
   let list = projects.filter(p => {

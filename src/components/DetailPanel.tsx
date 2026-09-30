@@ -6,7 +6,7 @@ import { canDeleteMatter, fmtDate, isOD, pri, progColor, stat, today } from '@/l
 import type { Project } from '@/lib/types';
 import { useStore } from './store';
 import { Photo, Tag } from './ui';
-import { ArchiveIcon, CalendarIcon, CheckIcon, CircleCheckIcon, CopyIcon, FileTextIcon, FlagIcon, GlobeIcon, LinkIcon, LockIcon, MailIcon, PaperclipIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserPlusIcon, XIcon } from 'lucide-react';
+import { ArchiveIcon, CalendarIcon, CheckIcon, CircleCheckIcon, CopyIcon, FileTextIcon, FlagIcon, GlobeIcon, LinkIcon, LockIcon, PaperclipIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserPlusIcon, XIcon } from 'lucide-react';
 
 export function DetailPanel() {
   const { projects, selectedPid } = useStore();
@@ -46,6 +46,17 @@ function PanelContent({ p }: { p: Project }) {
     addActivity(currentUser?.id || who, `logged <b>${hours}h</b> on <b>${p.title}</b>`);
     toast(TimerIcon, 'Time logged', `${hours}h added to ${p.title}`);
     setTfDesc(''); setTfHours(''); setFormOpen(false);
+  }
+
+  /** A link that opens All Tasks with this task's panel (see OpenTaskFromUrl). Only people who can see the task can open it. */
+  async function copyLink() {
+    const url = `${location.origin}/list?task=${encodeURIComponent(p.id)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast(CopyIcon, 'Link copied', 'Paste it anywhere to share this task.');
+    } catch {
+      window.prompt('Copy this link:', url);
+    }
   }
 
   return (
@@ -165,7 +176,7 @@ function PanelContent({ p }: { p: Project }) {
                 return (
                   <div
                     key={e.id} className={`assign-chip${on ? ' sel' : ''}`}
-                    onClick={() => setAssignees(p.id, on ? p.assignees.filter(x => x !== e.id) : [...p.assignees, e.id])}
+                    onClick={() => { setAssignees(p.id, on ? [] : [e.id]); setEditAssignees(false); }}
                   >
                     <div className="ac-mini-av"><Photo src={e.img} /></div>
                     <span>{e.name.split(' ')[0]}</span>
@@ -271,8 +282,7 @@ function PanelContent({ p }: { p: Project }) {
 
         {/* ACTIONS */}
         <div className="dp-section" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <button className="dp-action-btn primary" onClick={() => toast(MailIcon, 'Team notified', 'Task emails sent to all assignees.')}><MailIcon size={14} /> Notify Team</button>
-          <button className="dp-action-btn default" onClick={() => toast(CopyIcon, 'Copied', 'Task link copied to clipboard.')}><LinkIcon size={14} /> Copy Link</button>
+          <button className="dp-action-btn default" onClick={copyLink}><LinkIcon size={14} /> Copy Link</button>
           {p.status !== 'archive' && (
             <button className="dp-action-btn default" onClick={() => archiveProject(p.id)}><ArchiveIcon size={14} /> Archive Task</button>
           )}

@@ -8,7 +8,7 @@ import { dmRoom } from '@/lib/helpers';
 import { MessagesSquareIcon, SendHorizontalIcon } from 'lucide-react';
 
 export default function ChatPage() {
-  const { team, currentUser, chatMessages, loadRoom, sendMessage, setChatVisible } = useStore();
+  const { team, currentUser, chatMessages, chatUnreadByRoom, loadRoom, sendMessage, setActiveChatRoom } = useStore();
   const [room, setRoom] = useState('general');
   const [text, setText] = useState('');
   const [loaded, setLoaded] = useState<Record<string, boolean>>({});
@@ -18,10 +18,14 @@ export default function ChatPage() {
   const rooms = CHAT_ROOMS.filter(r => !r.billingOnly || currentUser?.isBilling || currentUser?.isAdmin);
   const msgs = chatMessages[room] || [];
 
+  // The open room counts as read; leaving the page stops that.
+  // Messages that arrived while the tab was in the background are read when it comes back.
   useEffect(() => {
-    setChatVisible(true);
-    return () => setChatVisible(false);
-  }, [setChatVisible]);
+    setActiveChatRoom(room);
+    const onVisible = () => { if (!document.hidden) setActiveChatRoom(room); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { document.removeEventListener('visibilitychange', onVisible); setActiveChatRoom(null); };
+  }, [room, setActiveChatRoom]);
 
   useEffect(() => {
     let live = true;
@@ -64,6 +68,7 @@ export default function ChatPage() {
               <div key={r.id} className={`chat-room-row${room === r.id ? ' active' : ''}`} onClick={() => setRoom(r.id)}>
                 <span className="chat-room-icon"><r.icon size={14} /></span>
                 <div className="chat-room-name"># {r.name}</div>
+                <UnreadBadge n={room === r.id ? 0 : chatUnreadByRoom[r.id]} />
               </div>
             ))}
           </div>
@@ -73,6 +78,7 @@ export default function ChatPage() {
               <div key={e.id} className={`chat-room-row${room === dmRoom(currentUser!.id, e.id) ? ' active' : ''}`} onClick={() => setRoom(dmRoom(currentUser!.id, e.id))}>
                 <div className="chat-msg-av" style={{ width: 22, height: 22, fontSize: 9, background: e.color }}>{e.init}</div>
                 <div className="chat-room-name">{e.name.split(' ')[0]}</div>
+                <UnreadBadge n={room === dmRoom(currentUser!.id, e.id) ? 0 : chatUnreadByRoom[dmRoom(currentUser!.id, e.id)]} />
               </div>
             ))}
           </div>
@@ -102,7 +108,7 @@ export default function ChatPage() {
                       {showDate && <div className="chat-date-divider">{dateStr}</div>}
                       <div className={`chat-msg${isOwn ? ' own' : ''}`}>
                         <div className="chat-msg-av" style={{ background: e?.color || '#64748B' }} title={e?.name || 'Unknown'}>
-                          <Photo src={e?.img} style={{ borderRadius: 'inherit' }} />
+                          <Photo src={e?.img} style={{ position: 'absolute', inset: 0 }} />
                           {e?.init || '?'}
                         </div>
                         <div>
@@ -137,4 +143,9 @@ export default function ChatPage() {
       </div>
     </div>
   );
+}
+
+function UnreadBadge({ n }: { n?: number }) {
+  if (!n) return null;
+  return <span className="chat-unread-badge" title={`${n} unread`}>{n > 99 ? '99+' : n}</span>;
 }

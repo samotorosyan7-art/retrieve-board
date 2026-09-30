@@ -12,7 +12,8 @@ import type { LucideIcon } from 'lucide-react';
 type NavItem = { id: string; icon: LucideIcon; label: string; badge?: number; badgeStyle?: React.CSSProperties };
 
 export function Sidebar() {
-  const { currentUser, clients, projects, chatUnread, search, setSearch, isDark, toggleTheme, logout } = useStore();
+  const { currentUser, clients, projects, chatUnreadByRoom, search, setSearch, isDark, toggleTheme, logout } = useStore();
+  const chatUnread = Object.values(chatUnreadByRoom).reduce((a, b) => a + b, 0);
   const { page, go } = useNav();
   const router = useRouter();
   const [avatarFailed, setAvatarFailed] = useState(false);

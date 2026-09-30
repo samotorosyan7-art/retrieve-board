@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { DEFAULT_FX } from '@/lib/constants';
 import {
-  loadAll, loadMessages, rowToActivity, rowToClient, rowToMember, rowToMessage, rowToProject, write, type Mutation,
+  loadAll, loadChatUnread, loadMessages, markChatRead, rowToActivity, rowToClient, rowToMember, rowToMessage, rowToProject, write, type Mutation,
 } from '@/lib/db';
 import { sendMatterAssignmentEmail } from '@/lib/email';
 import { canDeleteMatter, stat, today } from '@/lib/helpers';
@@ -58,7 +58,8 @@ function useStoreValue() {
   const [billingCurrency, setBillingCurrency] = useState<Currency>('USD');
   const [fx, setFx] = useState<Record<Currency, number>>(DEFAULT_FX);
   const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({});
-  const [chatUnread, setChatUnread] = useState(0);
+  // Unread messages per room (channel id or dm_<a>__<b>), from chat_reads (migration 005) + live updates.
+  const [chatUnreadByRoom, setChatUnreadByRoom] = useState<Record<string, number>>({});
 
   const currentUser = (sessionEmail && team.find(e => e.email.toLowerCase() === sessionEmail)) || null;
   const currentUserId = currentUser?.id ?? null;
@@ -72,7 +73,8 @@ function useStoreValue() {
   // Refs so async callbacks (realtime, debounces) always see fresh state.
   const state = useRef({ projects, clients, currentUser, team });
   state.current = { projects, clients, currentUser, team };
-  const chatVisible = useRef(false);
+  // The chat room currently on screen, if any — its messages are read as they arrive.
+  const activeChatRoom = useRef<string | null>(null);
 
   /* ── Toasts ── */
   const toastSeq = useRef(0);
@@ -179,7 +181,7 @@ function useStoreValue() {
   // While signed in: cached data → live data → realtime. On sign-out: clear everything.
   useEffect(() => {
     if (!sessionEmail) {
-      setTeam([]); setProjects([]); setClients([]); setActivity([]); setChatMessages({});
+      setTeam([]); setProjects([]); setClients([]); setActivity([]); setChatMessages({}); setChatUnreadByRoom({});
       setTeamLoaded(false); setSelectedPid(null); setModal(null);
       return;
     }
@@ -271,9 +273,21 @@ function useStoreValue() {
           const next = optIdx > -1 ? list.map((m, i) => (i === optIdx ? msg : m)) : [...list, msg];
           return { ...all, [msg.room]: next };
         });
-        if (!chatVisible.current && msg.who !== currentUserId) setChatUnread(n => n + 1);
+        if (msg.who === currentUserId) return;
+        if (activeChatRoom.current === msg.room && !document.hidden) markChatRead(msg.room).catch(() => {});
+        else setChatUnreadByRoom(u => ({ ...u, [msg.room]: (u[msg.room] || 0) + 1 }));
       })
-      .subscribe();
+      // On every (re)connect, take the counts from the database so nothing missed while offline is lost.
+      .subscribe(status => {
+        if (status !== 'SUBSCRIBED') return;
+        loadChatUnread()
+          .then(counts => {
+            const open = activeChatRoom.current;
+            if (open) { delete counts[open]; markChatRead(open).catch(() => {}); }
+            setChatUnreadByRoom(counts);
+          })
+          .catch(e => console.warn('Unread counts unavailable (has migration 005 been run?)', e));
+      });
     return () => { sb.removeChannel(channel); };
   }, [currentUserId]);
 
@@ -476,9 +490,12 @@ function useStoreValue() {
     setChatMessages(all => ({ ...all, [room]: [...(all[room] || []), optimistic] }));
     write({ type: 'message', entity: { room, who, text } }).catch(e => console.warn('Chat send error', e));
   };
-  const setChatVisible = useCallback((v: boolean) => {
-    chatVisible.current = v;
-    if (v) setChatUnread(0);
+  /** The chat page reports which room is open (null when it closes); that room counts as read. */
+  const setActiveChatRoom = useCallback((room: string | null) => {
+    activeChatRoom.current = room;
+    if (!room) return;
+    setChatUnreadByRoom(u => (u[room] ? { ...u, [room]: 0 } : u));
+    markChatRead(room).catch(e => console.warn('Could not mark chat read', e));
   }, []);
 
   /* ── Misc ── */
@@ -492,14 +509,14 @@ function useStoreValue() {
 
   return {
     hydrated, authStatus, team, projects, clients, activity, isDark, currentUser, sync,
-    selectedPid, modal, toasts, confirmState, setConfirmState, search, billingCurrency, fx, chatMessages, chatUnread,
+    selectedPid, modal, toasts, confirmState, setConfirmState, search, billingCurrency, fx, chatMessages, chatUnreadByRoom,
     setSearch, setBillingCurrency, setFx, setSelectedPid, setModal,
     toggleTheme: () => setIsDark(d => !d),
     toast, login, logout, sendPasswordEmail, emp, openPanel, closePanel: () => setSelectedPid(null),
     closeModal: () => setModal(null),
     addActivity, saveProject, patchProject, setStatus, setProgress, togglePrivacy, addTimeLog, setAssignees, createProject, archiveProject, deleteProject,
     saveClient, deleteClient, saveMember, deleteMember,
-    loadRoom, sendMessage, setChatVisible, clearSavedState,
+    loadRoom, sendMessage, setActiveChatRoom, clearSavedState,
   };
 }
 

@@ -30,7 +30,10 @@ export default function LandingPage() {
 
   useEffect(() => {
     // Admins start on the dashboard; everyone else on their own tasks.
-    if (authStatus === 'signedIn') router.replace(currentUser?.isAdmin ? '/dashboard' : '/tasks');
+    if (authStatus !== 'signedIn') return;
+    // Back to the page that sent them here (only same-site paths), else their home page.
+    const next = new URLSearchParams(location.search).get('next');
+    router.replace(next && /^\/(?![/\\])/.test(next) ? next : currentUser?.isAdmin ? '/dashboard' : '/tasks');
   }, [authStatus, currentUser, router]);
 
   async function attemptLogin() {

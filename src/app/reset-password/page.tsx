@@ -7,7 +7,7 @@ import { getSupabase } from '@/lib/supabase';
 import { useStore } from '@/components/store';
 import { ArrowRightIcon } from 'lucide-react';
 
-const MIN_LENGTH = 10;
+const MIN_LENGTH = 8;
 
 /** Landing page for invitation and password-reset emails; also used to change your password while signed in. */
 export default function ResetPasswordPage() {

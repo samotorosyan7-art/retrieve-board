@@ -63,7 +63,7 @@ export default function DashboardPage() {
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={cardTitle}>Urgent &amp; Overdue</div>
-              <button className="btn-ghost" style={{ fontSize: 11.5, padding: '4px 10px' }} onClick={() => go('list')}>View all <ArrowRightIcon size={12} /></button>
+              <button className="btn-ghost" style={{ fontSize: 11.5, padding: '4px 10px' }} onClick={() => go('list?sort=deadline-desc')}>View all <ArrowRightIcon size={12} /></button>
             </div>
             {urgent.length ? urgent.map(p => {
               const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
