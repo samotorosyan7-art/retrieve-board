@@ -6,7 +6,7 @@ import {
   loadAll, loadChatUnread, loadFirmSettings, loadMessages, markChatRead, saveFirmSettings, rowToActivity, rowToClient, rowToMember, rowToMessage, rowToProject, write, type Mutation,
 } from '@/lib/db';
 import { sendMatterAssignmentEmail } from '@/lib/email';
-import { canDeleteMatter, canMakePrivate, dmRoom, stat, today } from '@/lib/helpers';
+import { canDeleteMatter, canEditTitle, canMakePrivate, dmRoom, stat, today } from '@/lib/helpers';
 import { getSupabase } from '@/lib/supabase';
 import type {
   Activity, ChatMessage, Client, Currency, FirmSettings, Member, Project, StatusId, SyncState, TimeLog,
@@ -436,6 +436,23 @@ function useStoreValue() {
     const names = assignees.map(a => state.current.team.find(e => e.id === a)?.name.split(' ')[0]).filter(Boolean).join(', ');
     addActivity(user.id, `assigned <b>${p.title}</b> to ${names || 'nobody'}`);
   };
+  const renameProject = (id: string, title: string) => {
+    const p = state.current.projects.find(x => x.id === id);
+    if (!p || !title || title === p.title) return false;
+    if (!canEditTitle(p, state.current.currentUser)) {
+      toast(LockIcon, 'Cannot rename', 'Only admins and the person who created this task can rename it.');
+      return false;
+    }
+    patchProject(id, { title });
+    addActivity(me(), `renamed <b>${p.title}</b> to <b>${title}</b>`);
+    return true;
+  };
+  const setProjectBillable = (id: string, billable: boolean) => {
+    if (!state.current.currentUser?.isAdmin) { toast(LockIcon, 'Admins only', 'Only admins can choose which tasks are billed.'); return; }
+    const p = patchProject(id, { billable });
+    if (!p) return;
+    addActivity(me(), billable ? `included <b>${p.title}</b> in billing` : `excluded <b>${p.title}</b> from billing`);
+  };
   const archiveProject = (id: string) => {
     setStatus(id, 'archive');
     toast(ArchiveIcon, 'Task archived', 'Moved to Archive.');
@@ -574,7 +591,7 @@ function useStoreValue() {
     toggleTheme: () => setIsDark(d => !d),
     toast, login, logout, sendPasswordEmail, emp, openPanel, closePanel: () => setSelectedPid(null),
     closeModal: () => setModal(null),
-    addActivity, saveProject, patchProject, setStatus, sendToReview, setSupervisor, setProgress, togglePrivacy, addTimeLog, setAssignees, createProject, archiveProject, deleteProject,
+    addActivity, saveProject, patchProject, setStatus, sendToReview, setSupervisor, setProgress, togglePrivacy, addTimeLog, setAssignees, renameProject, setProjectBillable, createProject, archiveProject, deleteProject,
     saveClient, deleteClient, saveMember, deleteMember,
     loadRoom, sendMessage, setActiveChatRoom, clearSavedState,
   };

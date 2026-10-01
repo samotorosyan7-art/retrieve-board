@@ -128,7 +128,10 @@ export default function LogsPage() {
                       <div className="dt-title">{r.p.title}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{r.p.client}</div>
                     </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{r.hours}h</td>
+                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                      {r.hours}h
+                      {r.billable === false && <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)' }}>Non-billable</div>}
+                    </td>
                   </tr>
                 );
               })}

@@ -73,6 +73,10 @@ export function canSeeMatter(p: Project, user: Member | null) {
 export const canDeleteMatter = (p: Project, user: Member | null) =>
   !!user && (user.isAdmin || (!!p.createdBy && p.createdBy === user.id));
 
+/** Admins rename any task; members only tasks they created (matches migration 009). */
+export const canEditTitle = (p: Project, user: Member | null) =>
+  !!user && (user.isAdmin || (!!p.createdBy && p.createdBy === user.id));
+
 /** Direct-message room shared by two members: 'dm_<a>__<b>' with ids sorted (must match migration 002). */
 export const dmRoom = (a: string, b: string) => 'dm_' + [a, b].sort().join('__');
 

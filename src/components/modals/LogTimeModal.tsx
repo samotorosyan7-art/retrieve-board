@@ -16,14 +16,15 @@ export function LogTimeModal() {
   const [desc, setDesc] = useState('');
   const [hours, setHours] = useState('');
   const [date, setDate] = useState(today());
+  const [billable, setBillable] = useState(true);
 
   function submit() {
     const h = parseFloat(hours || '0');
     const who = isAdmin ? whoSel : currentUser?.id || '';
     if (!pid || !who || !desc.trim() || !h) { toast(TriangleAlertIcon, 'Missing info', 'Fill in all fields.'); return; }
-    const p = addTimeLog(pid, { who, hours: h, desc: desc.trim(), date, month: new Date(date).getMonth() + 1 });
+    const p = addTimeLog(pid, { who, hours: h, desc: desc.trim(), date, month: new Date(date).getMonth() + 1, billable });
     closeModal();
-    toast(TimerIcon, 'Time logged', `${h}h on "${p?.title}"`);
+    toast(TimerIcon, 'Time logged', `${h}h${billable ? '' : ' non-billable'} on "${p?.title}"`);
   }
 
   return (
@@ -52,6 +53,10 @@ export function LogTimeModal() {
           <div><label className="form-label">Hours</label><input className="input" type="number" step="0.5" min="0.5" placeholder="1.5" value={hours} onChange={e => setHours(e.target.value)} /></div>
           <div><label className="form-label">Date</label><input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
         </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+          <input type="checkbox" checked={billable} onChange={e => setBillable(e.target.checked)} />
+          Billable — include in Billing &amp; Invoices
+        </label>
         <ModalFooter label="Log Entry" onSubmit={submit} />
       </div>
     </>

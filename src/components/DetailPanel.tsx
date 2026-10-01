@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { MATTER_TYPES, PRIORITIES, STATUSES } from '@/lib/constants';
-import { canDeleteMatter, canMakePrivate, fmtDate, isOD, pri, progColor, stat, today } from '@/lib/helpers';
+import { canDeleteMatter, canEditTitle, canMakePrivate, fmtDate, isOD, pri, progColor, stat, today } from '@/lib/helpers';
 import type { Project } from '@/lib/types';
 import { useStore } from './store';
 import { Photo, Tag } from './ui';
-import { ArchiveIcon, CalendarIcon, CheckIcon, CircleCheckIcon, CopyIcon, FileTextIcon, FlagIcon, GlobeIcon, LinkIcon, LockIcon, PaperclipIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserCheckIcon, UserPlusIcon, XIcon } from 'lucide-react';
+import { ArchiveIcon, CalendarIcon, CheckIcon, CircleCheckIcon, CopyIcon, FileTextIcon, FlagIcon, GlobeIcon, LinkIcon, LockIcon, PaperclipIcon, PencilIcon, ReceiptIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserCheckIcon, UserPlusIcon, XIcon } from 'lucide-react';
 
 export function DetailPanel() {
   const { projects, selectedPid } = useStore();
@@ -21,7 +21,7 @@ export function DetailPanel() {
 function PanelContent({ p }: { p: Project }) {
   const {
     currentUser, team, emp, closePanel, togglePrivacy, setProgress, setStatus, patchProject,
-    addTimeLog, setAssignees, setSupervisor, addActivity, archiveProject, deleteProject, toast,
+    addTimeLog, setAssignees, setSupervisor, renameProject, setProjectBillable, addActivity, archiveProject, deleteProject, toast,
   } = useStore();
   const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
   const isOwner = !p.createdBy || p.createdBy === currentUser?.id;
@@ -29,6 +29,7 @@ function PanelContent({ p }: { p: Project }) {
   // Admins log time for anyone; everyone else only for themselves, and only on tasks they're assigned to.
   const isAdmin = !!currentUser?.isAdmin;
   const canLogTime = isAdmin || (!!currentUser && p.assignees.includes(currentUser.id));
+  const canRename = canEditTitle(p, currentUser);
 
   const [notes, setNotes] = useState(p.notes || '');
   const [formOpen, setFormOpen] = useState(false);
@@ -36,6 +37,15 @@ function PanelContent({ p }: { p: Project }) {
   const [tfDesc, setTfDesc] = useState('');
   const [tfHours, setTfHours] = useState('');
   const [tfWho, setTfWho] = useState(currentUser?.id || '');
+  const [tfBillable, setTfBillable] = useState(true);
+  const [titleDraft, setTitleDraft] = useState<string | null>(null);
+
+  function saveTitle() {
+    const title = (titleDraft ?? '').trim();
+    setTitleDraft(null);
+    if (!title) { toast(TriangleAlertIcon, 'Missing info', 'Task title cannot be empty.'); return; }
+    if (renameProject(p.id, title)) toast(PencilIcon, 'Task renamed', title);
+  }
 
   function addTimeEntry() {
     const hours = parseFloat(tfHours || '0');
@@ -43,10 +53,10 @@ function PanelContent({ p }: { p: Project }) {
     const who = isAdmin ? tfWho : currentUser?.id || '';
     if (!canLogTime) return;
     if (!desc || !hours || !who) { toast(TriangleAlertIcon, 'Missing info', 'Please fill in all fields.'); return; }
-    addTimeLog(p.id, { who, hours, desc, date: today(), month: new Date().getMonth() + 1 });
-    addActivity(currentUser?.id || who, `logged <b>${hours}h</b> on <b>${p.title}</b>`);
-    toast(TimerIcon, 'Time logged', `${hours}h added to ${p.title}`);
-    setTfDesc(''); setTfHours(''); setFormOpen(false);
+    addTimeLog(p.id, { who, hours, desc, date: today(), month: new Date().getMonth() + 1, billable: tfBillable });
+    addActivity(currentUser?.id || who, `logged <b>${hours}h</b>${tfBillable ? '' : ' (non-billable)'} on <b>${p.title}</b>`);
+    toast(TimerIcon, 'Time logged', `${hours}h${tfBillable ? '' : ' non-billable'} added to ${p.title}`);
+    setTfDesc(''); setTfHours(''); setTfBillable(true); setFormOpen(false);
   }
 
   /** A link that opens All Tasks with this task's panel (see OpenTaskFromUrl). Only people who can see the task can open it. */
@@ -71,7 +81,23 @@ function PanelContent({ p }: { p: Project }) {
           </div>
           <button className="dp-close" onClick={closePanel}><XIcon size={14} /></button>
         </div>
-        <div className="dp-title">{p.title}</div>
+        {titleDraft !== null ? (
+          <input
+            className="input dp-title" autoFocus value={titleDraft} style={{ padding: '4px 8px' }}
+            onChange={e => setTitleDraft(e.target.value)}
+            onBlur={saveTitle}
+            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setTitleDraft(null); }}
+          />
+        ) : (
+          <div className="dp-title" style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+            <span>{p.title}</span>
+            {canRename && (
+              <button className="btn-ghost" title="Rename task" style={{ padding: '2px 6px', marginTop: 1 }} onClick={() => setTitleDraft(p.title)}>
+                <PencilIcon size={12} />
+              </button>
+            )}
+          </div>
+        )}
         <div className="dp-client" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span>{p.client} · {p.area}</span>
           {canTogglePrivacy && (
@@ -239,6 +265,10 @@ function PanelContent({ p }: { p: Project }) {
               <label className="form-label">Description</label>
               <input className="input" placeholder="What did you work on?" value={tfDesc} onChange={e => setTfDesc(e.target.value)} />
             </div>
+            <label className="form-row" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={tfBillable} onChange={e => setTfBillable(e.target.checked)} />
+              Billable — include in Billing &amp; Invoices
+            </label>
             <div className="time-form-row">
               <div>
                 <label className="form-label">Hours</label>
@@ -264,7 +294,7 @@ function PanelContent({ p }: { p: Project }) {
                 <div className="tl-row" key={i}>
                   <div className="tl-left">
                     <div className="tl-desc">{l.desc}</div>
-                    <div className="tl-meta">{emp(l.who)?.name.split(' ')[0] || ''} · {fmtDate(l.date)}</div>
+                    <div className="tl-meta">{emp(l.who)?.name.split(' ')[0] || ''} · {fmtDate(l.date)}{l.billable === false && ' · Non-billable'}</div>
                   </div>
                   <div className="tl-right"><div className="tl-hours">{l.hours}h</div></div>
                 </div>
@@ -274,6 +304,21 @@ function PanelContent({ p }: { p: Project }) {
             <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No time logged yet.</div>
           )}
         </div>
+
+        {/* BILLING — admins choose which tasks go to Billing & Invoices. */}
+        {isAdmin && <div className="dp-section">
+          <div className="dp-section-label">Billing</div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text-primary)', cursor: 'pointer' }}>
+            <input
+              type="checkbox" checked={p.billable !== false}
+              onChange={e => {
+                setProjectBillable(p.id, e.target.checked);
+                toast(ReceiptIcon, e.target.checked ? 'Included in billing' : 'Excluded from billing', p.title);
+              }}
+            />
+            Include this task in Billing &amp; Invoices
+          </label>
+        </div>}
 
         {/* FILES */}
         <div className="dp-section">
