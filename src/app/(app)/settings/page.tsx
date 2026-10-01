@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/components/store';
+import { homePath } from '@/lib/helpers';
 import { PageHeader, Photo } from '@/components/ui';
 import { PAYMENT_TERMS } from '@/lib/constants';
 import type { FirmSettings } from '@/lib/types';
@@ -25,7 +26,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!currentUser?.isAdmin) {
       toast(LockIcon, 'Access denied', 'Settings are admin-only.');
-      router.replace('/dashboard');
+      router.replace(homePath(currentUser));
     }
   }, [currentUser, router, toast]);
   if (!currentUser?.isAdmin) return null;

@@ -46,15 +46,14 @@ export function Sidebar() {
       </div>
       <div className="sb-nav">
         <div className="sb-section">Overview</div>
-        {!isAdmin && link(myTasks)}
-        {link({ id: 'dashboard', icon: LayoutDashboardIcon, label: 'Dashboard' })}
-        {isAdmin && link(myTasks)}
+        {isAdmin && link({ id: 'dashboard', icon: LayoutDashboardIcon, label: 'Dashboard' })}
+        {link(myTasks)}
         <div className="sb-section">Tasks</div>
         {link({ id: 'kanban', icon: SquareKanbanIcon, label: 'Kanban Board' })}
         {link({ id: 'list', icon: ListIcon, label: 'All Tasks' })}
         {link({ id: 'calendar', icon: CalendarIcon, label: 'Calendar' })}
-        {link({ id: 'clients', icon: Building2Icon, label: 'Clients' })}
-        {link({ id: 'team', icon: UsersIcon, label: 'Team Workload' })}
+        {isAdmin && link({ id: 'clients', icon: Building2Icon, label: 'Clients' })}
+        {isAdmin && link({ id: 'team', icon: UsersIcon, label: 'Team Workload' })}
         {isAdmin && link({ id: 'logs', icon: TimerIcon, label: 'Logs' })}
         {link({ id: 'chat', icon: MessagesSquareIcon, label: 'Team Chat', badge: chatUnread })}
         {isBilling && (

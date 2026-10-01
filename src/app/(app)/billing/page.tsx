@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useStore } from '@/components/store';
 import { PageHeader } from '@/components/ui';
 import { LOGO_SRC } from '@/lib/constants';
-import { fmtBill } from '@/lib/helpers';
+import { fmtBill, homePath } from '@/lib/helpers';
 import type { Currency } from '@/lib/types';
 import { CopyIcon, FileTextIcon, LockIcon, MailIcon, PencilIcon, PrinterIcon, Share2Icon, TriangleAlertIcon } from 'lucide-react';
 
@@ -24,7 +24,7 @@ export default function BillingPage() {
   useEffect(() => {
     if (!allowed) {
       toast(LockIcon, 'Access denied', 'Billing is restricted to Managing Partner and Senior Partner.');
-      router.replace('/dashboard');
+      router.replace(homePath(currentUser));
     }
   }, [allowed, router, toast]);
 

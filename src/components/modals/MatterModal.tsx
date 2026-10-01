@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { AREAS, MATTER_TYPES, PRIORITIES, STATUSES } from '@/lib/constants';
 import type { PriorityId, StatusId } from '@/lib/types';
+import { canMakePrivate } from '@/lib/helpers';
 import { useStore } from '../store';
 import { Photo } from '../ui';
 import { ModalFooter, ModalHeader } from './ModalHost';
@@ -11,7 +12,7 @@ import { CircleCheckIcon, GlobeIcon, LockIcon, TriangleAlertIcon } from 'lucide-
 const WORKLOAD_STATUSES = STATUSES.filter(s => s.id === 'intake' || s.id === 'inprogress' || s.id === 'review');
 
 export function MatterModal({ client: initialClient = '' }: { client?: string }) {
-  const { team, clients, projects, createProject, toast, closeModal } = useStore();
+  const { team, clients, projects, currentUser, createProject, toast, closeModal } = useStore();
   const [title, setTitle] = useState('');
   const [client, setClient] = useState(initialClient);
   const [area, setArea] = useState(AREAS[0]);
@@ -22,20 +23,17 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
   const [assignees, setAssignees] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
-  const [supervisor, setSupervisor] = useState('');
 
   // One assignee per task: picking someone replaces the previous pick; clicking them again clears it.
   const toggleAssign = (id: string) => {
     setAssignees(a => (a.includes(id) ? [] : [id]));
-    if (id === supervisor) setSupervisor('');
   };
   // What the chosen assignee already has on their plate.
   const workload = WORKLOAD_STATUSES.map(s => ({ ...s, n: projects.filter(p => p.status === s.id && p.assignees.includes(assignees[0])).length }));
 
   function submit() {
     if (!title.trim() || !client.trim()) { toast(TriangleAlertIcon, 'Missing info', 'Title and client are required.'); return; }
-    if (status === 'review' && !supervisor) { toast(TriangleAlertIcon, 'Missing info', 'Choose a supervisor for a task in Supervisor Review.'); return; }
-    const p = createProject({ title: title.trim(), client: client.trim(), area, matterType, status, priority, assignees, due, notes, isPrivate, supervisor: supervisor || undefined });
+    const p = createProject({ title: title.trim(), client: client.trim(), area, matterType, status, priority, assignees, due, notes, isPrivate: isPrivate && canMakePrivate(currentUser) });
     closeModal();
     toast(CircleCheckIcon, 'Task created', `"${p.title}" added to the board.`);
   }
@@ -76,7 +74,8 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
           <div>
             <label className="form-label">Status</label>
             <select className="input sel" value={status} onChange={e => setStatus(e.target.value as StatusId)}>
-              {STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+              {/* Supervisor Review is reached by moving the task there, which asks for the supervisor. */}
+              {STATUSES.filter(s => s.id !== 'review').map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
           </div>
         </div>
@@ -101,17 +100,10 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
           )}
         </div>
         <div>
-          <label className="form-label">Supervisor{status === 'review' ? ' *' : ''}</label>
-          <select className="input sel" value={supervisor} onChange={e => setSupervisor(e.target.value)}>
-            <option value="">— Not set —</option>
-            {team.filter(e => !assignees.includes(e.id)).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-          </select>
-        </div>
-        <div>
           <label className="form-label">Notes</label>
           <textarea className="input" rows={3} placeholder="Key context, deadlines, instructions…" value={notes} onChange={e => setNotes(e.target.value)} style={{ resize: 'vertical' }} />
         </div>
-        <div className={`nm-privacy-row${isPrivate ? ' private' : ''}`}>
+        {canMakePrivate(currentUser) && <div className={`nm-privacy-row${isPrivate ? ' private' : ''}`}>
           <label className="nm-privacy-label" onClick={() => setIsPrivate(v => !v)}>
             <div className="nm-priv-icon">{isPrivate ? <LockIcon size={20} /> : <GlobeIcon size={20} />}</div>
             <div>
@@ -120,7 +112,7 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
             </div>
             <div className="nm-priv-toggle" />
           </label>
-        </div>
+        </div>}
         <ModalFooter label="Create Task" onSubmit={submit} />
       </div>
     </>

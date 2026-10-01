@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LOGO_SRC } from '@/lib/constants';
+import { homePath } from '@/lib/helpers';
 import { getSupabase } from '@/lib/supabase';
 import { useStore } from '@/components/store';
 import { ArrowRightIcon } from 'lucide-react';
@@ -52,7 +53,7 @@ export default function ResetPasswordPage() {
     if (error) { setError(error.message); return; }
     setDone(true);
     setPasswordRecovery(false);
-    setTimeout(() => router.replace(currentUser?.isAdmin ? '/dashboard' : '/tasks'), 1200);
+    setTimeout(() => router.replace(homePath(currentUser)), 1200);
   }
 
   return (

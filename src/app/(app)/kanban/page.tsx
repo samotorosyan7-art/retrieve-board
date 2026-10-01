@@ -1,15 +1,17 @@
 'use client';
 
 import { MatterFilterRow, useMatterFilters } from '@/components/MatterFilters';
+import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
 import { AvStack, PageHeader, Tag } from '@/components/ui';
 import { STATUSES } from '@/lib/constants';
-import { firstWords, fmtShort, isOD, pri, progColor, stat } from '@/lib/helpers';
+import { canMakePrivate, firstWords, fmtShort, isOD, pri, progColor, stat } from '@/lib/helpers';
 import type { StatusId } from '@/lib/types';
 import { GlobeIcon, LockIcon, MoveIcon, TriangleAlertIcon } from 'lucide-react';
 
 export default function KanbanPage() {
   const { currentUser, selectedPid, openPanel, setStatus, togglePrivacy, toast } = useStore();
+  const { go } = useNav();
   const filters = useMatterFilters();
   const f = filters.list;
 
@@ -120,7 +122,12 @@ export default function KanbanPage() {
 
   return (
     <div className="page active" id="page-kanban">
-      <PageHeader title="Kanban" light="Board" sub={`${f.length} task${f.length !== 1 ? 's' : ''} shown · drag a card to another column to move it`} />
+      <PageHeader title="Kanban" light="Board" sub={`${f.length} task${f.length !== 1 ? 's' : ''} shown · drag a card to another column to move it`}>
+        <div className="seg-ctrl">
+          <button className="seg-btn" onClick={() => go('list')}>List</button>
+          <button className="seg-btn active">Kanban</button>
+        </div>
+      </PageHeader>
       <MatterFilterRow {...filters} />
 
       <div className="kanban" onMouseDown={onBoardMouseDown}>
@@ -138,7 +145,7 @@ export default function KanbanPage() {
               <div className="k-cards">
                 {cards.map(p => {
                   const pr = pri(p.priority), od = isOD(p);
-                  const isOwner = !p.createdBy || p.createdBy === currentUser?.id;
+                  const canTogglePrivacy = (!p.createdBy || p.createdBy === currentUser?.id) && (p.isPrivate || canMakePrivate(currentUser));
                   return (
                     <div
                       key={p.id}
@@ -154,12 +161,12 @@ export default function KanbanPage() {
                       <div className="mc-client">{p.client}</div>
                       <div className="mc-pbar"><div className="pbar"><div className="pbar-fill" style={{ width: `${p.progress}%`, background: progColor(p.progress) }} /></div></div>
                       <div className="mc-foot">
-                        <AvStack ids={p.assignees.slice(0, 3)} />
+                        <AvStack ids={p.assignees.slice(0, 3)} withInitials />
                         <div className={`mc-due${od ? ' overdue' : ''}`}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtShort(p.due)}</div>
                       </div>
                       <div className="mc-area" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>{p.matterType ? `${p.matterType} · ` : ''}{firstWords(p.area, 3)}</span>
-                        {isOwner && (
+                        {canTogglePrivacy && (
                           <button
                             className="mc-priv-btn"
                             title={p.isPrivate ? 'Make public' : 'Make private'}

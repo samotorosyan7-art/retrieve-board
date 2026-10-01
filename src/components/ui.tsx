@@ -27,11 +27,14 @@ export function Av({ e, size = 24, ml = 0 }: { e?: Member; size?: number; ml?: n
   );
 }
 
-export function AvStack({ ids, size = 22 }: { ids: string[]; size?: number }) {
+/** withInitials: also print the assignees' initials next to the photos (e.g. on Kanban cards). */
+export function AvStack({ ids, size = 22, withInitials = false }: { ids: string[]; size?: number; withInitials?: boolean }) {
   const { emp } = useStore();
+  const inits = withInitials ? ids.map(id => emp(id)?.init).filter(Boolean).join(', ') : '';
   return (
     <div className="av-stack">
       {ids.map((id, i) => <Av key={id} e={emp(id)} size={size} ml={i > 0 ? -7 : 0} />)}
+      {inits && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{inits}</span>}
     </div>
   );
 }

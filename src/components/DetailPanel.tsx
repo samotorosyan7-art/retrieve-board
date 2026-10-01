@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { MATTER_TYPES, PRIORITIES, STATUSES } from '@/lib/constants';
-import { canDeleteMatter, fmtDate, isOD, pri, progColor, stat, today } from '@/lib/helpers';
+import { canDeleteMatter, canMakePrivate, fmtDate, isOD, pri, progColor, stat, today } from '@/lib/helpers';
 import type { Project } from '@/lib/types';
 import { useStore } from './store';
 import { Photo, Tag } from './ui';
@@ -25,6 +25,7 @@ function PanelContent({ p }: { p: Project }) {
   } = useStore();
   const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
   const isOwner = !p.createdBy || p.createdBy === currentUser?.id;
+  const canTogglePrivacy = isOwner && (p.isPrivate || canMakePrivate(currentUser));
   // Admins log time for anyone; everyone else only for themselves, and only on tasks they're assigned to.
   const isAdmin = !!currentUser?.isAdmin;
   const canLogTime = isAdmin || (!!currentUser && p.assignees.includes(currentUser.id));
@@ -73,7 +74,7 @@ function PanelContent({ p }: { p: Project }) {
         <div className="dp-title">{p.title}</div>
         <div className="dp-client" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span>{p.client} · {p.area}</span>
-          {isOwner && (
+          {canTogglePrivacy && (
             <button
               onClick={() => togglePrivacy(p.id)}
               style={{
@@ -132,8 +133,8 @@ function PanelContent({ p }: { p: Project }) {
           </div>
         </div>
 
-        {/* SUPERVISOR */}
-        <div className="dp-section">
+        {/* SUPERVISOR — chosen when the task moves to Supervisor Review; changeable while it's there. */}
+        {p.status === 'review' && <div className="dp-section">
           <div className="dp-section-label">Supervisor</div>
           <select
             className="input sel" value={p.supervisor || ''}
@@ -142,7 +143,7 @@ function PanelContent({ p }: { p: Project }) {
             <option value="">— Not set —</option>
             {team.filter(e => !p.assignees.includes(e.id) || e.id === p.supervisor).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
           </select>
-        </div>
+        </div>}
 
         {/* MATTER TYPE */}
         <div className="dp-section">

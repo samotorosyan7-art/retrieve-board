@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/components/store';
 import { Av, PageHeader } from '@/components/ui';
-import { canSeeMatter, fmtDate, today } from '@/lib/helpers';
+import { canSeeMatter, fmtDate, homePath, today } from '@/lib/helpers';
 import type { Project, TimeLog } from '@/lib/types';
 import { LockIcon, XIcon } from 'lucide-react';
 
@@ -33,7 +33,7 @@ export default function LogsPage() {
   useEffect(() => {
     if (!currentUser?.isAdmin) {
       toast(LockIcon, 'Access denied', 'Time logs are admin-only.');
-      router.replace('/dashboard');
+      router.replace(homePath(currentUser));
     }
   }, [currentUser, router, toast]);
   const set = (k: keyof Filters) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(x => ({ ...x, [k]: e.target.value }));

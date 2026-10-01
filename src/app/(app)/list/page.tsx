@@ -5,10 +5,10 @@ import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
 import { AvStack, PageHeader, Tag } from '@/components/ui';
 import { firstWords, fmtDate, isOD, pri, progColor, stat } from '@/lib/helpers';
-import { LockIcon, PlusIcon, TriangleAlertIcon } from 'lucide-react';
+import { LockIcon, TriangleAlertIcon } from 'lucide-react';
 
 export default function ListPage() {
-  const { selectedPid, setModal, openPanel } = useStore();
+  const { selectedPid, openPanel } = useStore();
   const { go } = useNav();
   const filters = useMatterFilters();
   const f = filters.list;
@@ -20,7 +20,6 @@ export default function ListPage() {
           <button className="seg-btn active">List</button>
           <button className="seg-btn" onClick={() => go('kanban')}>Kanban</button>
         </div>
-        <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}><PlusIcon size={14} /> New Task</button>
       </PageHeader>
       <MatterFilterRow {...filters} withStatus />
 

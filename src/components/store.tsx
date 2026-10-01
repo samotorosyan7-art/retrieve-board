@@ -6,7 +6,7 @@ import {
   loadAll, loadChatUnread, loadFirmSettings, loadMessages, markChatRead, saveFirmSettings, rowToActivity, rowToClient, rowToMember, rowToMessage, rowToProject, write, type Mutation,
 } from '@/lib/db';
 import { sendMatterAssignmentEmail } from '@/lib/email';
-import { canDeleteMatter, dmRoom, stat, today } from '@/lib/helpers';
+import { canDeleteMatter, canMakePrivate, dmRoom, stat, today } from '@/lib/helpers';
 import { getSupabase } from '@/lib/supabase';
 import type {
   Activity, ChatMessage, Client, Currency, FirmSettings, Member, Project, StatusId, SyncState, TimeLog,
@@ -415,6 +415,10 @@ function useStoreValue() {
       return;
     }
     const priv = !p.isPrivate;
+    if (priv && !canMakePrivate(state.current.currentUser)) {
+      toast(LockIcon, 'Admins only', 'Only admins can make a task private.');
+      return;
+    }
     patchProject(id, { isPrivate: priv });
     toast(priv ? LockIcon : GlobeIcon, priv ? 'Task is now private' : 'Task is now public',
       priv ? 'Only you can see this task.' : 'Visible to the whole team.');

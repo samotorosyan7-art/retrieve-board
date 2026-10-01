@@ -89,3 +89,10 @@ export function makeInitials(name: string, taken: string[]) {
   for (const b of seconds) if (!used.has(a + b)) return a + b;
   return a + (last[0] || first[1] || '');
 }
+
+/** Pages only admins can open; members are sent to their own tasks. */
+export const ADMIN_PAGES = ['dashboard', 'team', 'clients', 'logs', 'settings'];
+/** Where a member lands after signing in or being turned away from a page. */
+export const homePath = (user: Member | null) => (user?.isAdmin ? '/dashboard' : '/tasks');
+/** Only admins make tasks private (members may still make their own private task public). */
+export const canMakePrivate = (user: Member | null) => !!user?.isAdmin;

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LOGO_SRC } from '@/lib/constants';
 import { useStore } from '@/components/store';
+import { homePath } from '@/lib/helpers';
 import { ArrowRightIcon, ArrowUpRightIcon, CalendarIcon, CheckIcon, EyeIcon, EyeOffIcon, LockKeyholeIcon, MoonIcon, ReceiptIcon, ShieldCheckIcon, SquareKanbanIcon, SunIcon, TimerIcon, UsersIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -37,7 +38,7 @@ export default function LandingPage() {
     if (authStatus !== 'signedIn') return;
     // Back to the page that sent them here (only same-site paths), else their home page.
     const next = new URLSearchParams(location.search).get('next');
-    router.replace(next && /^\/(?![/\\])/.test(next) ? next : currentUser?.isAdmin ? '/dashboard' : '/tasks');
+    router.replace(next && /^\/(?![/\\])/.test(next) ? next : homePath(currentUser));
   }, [authStatus, currentUser, passwordRecovery, router]);
 
   async function attemptLogin() {
