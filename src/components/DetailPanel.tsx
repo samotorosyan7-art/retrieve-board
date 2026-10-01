@@ -6,7 +6,7 @@ import { canDeleteMatter, canEditTitle, canMakePrivate, fmtDate, isOD, pri, prog
 import type { Project } from '@/lib/types';
 import { useStore } from './store';
 import { Photo, Tag } from './ui';
-import { ArchiveIcon, CalendarIcon, CheckIcon, CircleCheckIcon, CopyIcon, FileTextIcon, FlagIcon, GlobeIcon, LinkIcon, LockIcon, PaperclipIcon, PencilIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserCheckIcon, UserPlusIcon, XIcon } from 'lucide-react';
+import { ArchiveIcon, CalendarIcon, CircleCheckIcon, CopyIcon, FlagIcon, GlobeIcon, LinkIcon, LockIcon, PencilIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserCheckIcon, UserPlusIcon, XIcon } from 'lucide-react';
 
 export function DetailPanel() {
   const { projects, selectedPid } = useStore();
@@ -303,24 +303,6 @@ function PanelContent({ p }: { p: Project }) {
           ) : (
             <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No time logged yet.</div>
           )}
-        </div>
-
-        {/* FILES */}
-        <div className="dp-section">
-          <div className="dp-section-label">Files &amp; Documents</div>
-          <div className="file-drop-zone" onClick={() => toast(PaperclipIcon, 'File attached', 'In production: uploads to Google Drive folder for this task.')}>
-            <div className="fdz-icon"><PaperclipIcon size={22} /></div>
-            <div className="fdz-txt">Drop files here or click to attach</div>
-            <div className="fdz-sub">Auto-syncs to Google Drive · {p.client} folder</div>
-          </div>
-          {(p.files || []).length ? p.files.map((f, i) => (
-            <div className="file-row" key={i}>
-              <span className="file-icon"><FileTextIcon size={16} /></span>
-              <span className="file-name">{f.name}</span>
-              <span className="file-size">{f.size}</span>
-              {f.drive && <span className="file-drive-badge"><CheckIcon size={10} /> Drive</span>}
-            </div>
-          )) : <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>No files attached.</div>}
         </div>
 
         {/* ACTIONS */}

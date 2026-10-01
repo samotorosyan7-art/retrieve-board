@@ -29,12 +29,12 @@ export default function ListPage() {
         ) : (
           <table className="data-table">
             <colgroup>
-              {[21, 12, 9, 11, 7, 8, 12, 10, 10].map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
+              {[19, 12, 9, 11, 10, 8, 11, 10, 10].map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
             </colgroup>
             <thead>
               <tr>
                 <th>Task</th><th>Client</th><th>Type</th><th>Practice Area</th>
-                <th>Team</th><th>Priority</th><th>Status</th><th>Progress</th><th>Due Date</th>
+                <th>Assignee</th><th>Priority</th><th>Status</th><th>Progress</th><th>Due Date</th>
               </tr>
             </thead>
             <tbody>
@@ -46,7 +46,7 @@ export default function ListPage() {
                     <td><div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.client}</div></td>
                     <td><div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>{p.matterType || '—'}</div></td>
                     <td><div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>{firstWords(p.area, 3)}</div></td>
-                    <td><AvStack ids={p.assignees} size={22} /></td>
+                    <td><AvStack ids={p.assignees} size={22} withInitials /></td>
                     <td><Tag {...pr} /></td>
                     <td><Tag {...st} /></td>
                     <td>

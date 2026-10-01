@@ -56,7 +56,7 @@ function useStoreValue() {
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [search, setSearch] = useState('');
-  const [billingCurrency, setBillingCurrency] = useState<Currency>('USD');
+  const [billingCurrency, setBillingCurrency] = useState<Currency>('AMD');
   // Firm profile + billing config from Settings (migration 006); exchange rates come from it.
   const [firm, setFirm] = useState<FirmSettings>(DEFAULT_FIRM);
   const fx: Record<Currency, number> = { USD: 1, EUR: firm.fxEUR, AMD: firm.fxAMD };

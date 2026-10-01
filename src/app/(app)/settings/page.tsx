@@ -30,7 +30,7 @@ export default function SettingsPage() {
 
   return (
     <div className="page active" id="page-settings">
-      <PageHeader title="Settings &" light="Access" sub="Admin-only configuration for Retrieve PM" />
+      <PageHeader title="Settings &" light="Access" sub="Admin-only configuration for Retrieve Group" />
       <div className="settings-layout">
         <div className="settings-nav-panel">
           {PANELS.map(p => (

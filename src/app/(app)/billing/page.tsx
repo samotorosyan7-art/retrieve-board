@@ -69,7 +69,7 @@ export default function BillingPage() {
     <div className="page active" id="page-billing">
       <PageHeader title="Billing &" light="Invoices" sub="Monthly billing reports based on logged time entries · Admin only">
         <div className="seg-ctrl">
-          {(['USD', 'EUR', 'AMD'] as Currency[]).map(c => (
+          {(['AMD', 'USD', 'EUR'] as Currency[]).map(c => (
             <button key={c} className={`seg-btn${billingCurrency === c ? ' active' : ''}`} onClick={() => setBillingCurrency(c)}>
               {{ USD: '$', EUR: '€', AMD: '֏' }[c]} {c}
             </button>
@@ -116,26 +116,13 @@ export default function BillingPage() {
 }
 
 function Invoice({ client, entries, period, onTotal }: { client: string; entries: Entry[]; period: string; onTotal: (v: number) => void }) {
-  const { currentUser, setLogInInvoice, billingCurrency, fx, firm, toast } = useStore();
+  const { currentUser, setLogInInvoice, billingCurrency, firm, toast } = useStore();
   const isAdmin = !!currentUser?.isAdmin;
   const [rates, setRates] = useState<Record<string, string>>({});
   const invNum = useMemo(() => `INV-${period.slice(5, 7)}-${period.slice(0, 4)}-${Math.floor(Math.random() * 900 + 100)}`, [period]);
   const ref = useRef<HTMLDivElement>(null);
-  // Rates are typed in the selected currency, so amounts are in it too — no conversion when showing them.
+  // Rates are typed in the selected currency, so amounts are in it too. Switching currency only relabels them — no conversion.
   const fmt = (v: number) => (v > 0 ? fmtCurrency(v, billingCurrency) : '—');
-  // Switching currency converts the rates already typed, so the invoice keeps its value.
-  const prevCurrency = useRef(billingCurrency);
-  useEffect(() => {
-    const from = prevCurrency.current;
-    prevCurrency.current = billingCurrency;
-    if (from === billingCurrency) return;
-    const factor = (fx[billingCurrency] || 1) / (fx[from] || 1);
-    const digits = billingCurrency === 'AMD' ? 0 : 2;
-    setRates(rs => Object.fromEntries(Object.entries(rs).map(([k, v]) => {
-      const n = parseFloat(v);
-      return [k, Number.isFinite(n) ? String(+(n * factor).toFixed(digits)) : v];
-    })));
-  }, [billingCurrency, fx]);
 
   const amounts = entries.map(e => (e.included ? e.hours * (parseFloat(rates[e.key]) || 0) : 0));
   const sub = amounts.reduce((s, a) => s + a, 0);
@@ -217,7 +204,7 @@ function Invoice({ client, entries, period, onTotal }: { client: string; entries
                 <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-primary)' }}>{e.hours}h</td>
                 <td>
                   <input
-                    type="number" className="input inv-rate-input" placeholder="e.g. 200" min={0} step={10}
+                    type="number" className="input inv-rate-input" placeholder={billingCurrency === 'AMD' ? 'e.g. 50000' : 'e.g. 200'} min={0} step={billingCurrency === 'AMD' ? 1000 : 10}
                     style={{ width: 110, padding: '5px 8px', fontSize: 12, fontFamily: 'var(--font-mono)' }}
                     disabled={!e.included} value={rates[e.key] ?? ''} onChange={ev => setRates(r => ({ ...r, [e.key]: ev.target.value }))}
                   />
