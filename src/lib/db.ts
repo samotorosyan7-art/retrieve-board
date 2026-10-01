@@ -5,9 +5,9 @@ import type { Activity, ChatMessage, Client, FirmSettings, Member, Project } fro
 /* ── Row converters (DB snake_case ↔ app camelCase) ── */
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-/* Optional columns — added by supabase/migrations/001_matter_fields.sql (supervisor: 007, billable: 009). Until that migration runs we
+/* Optional columns — added by supabase/migrations/001_matter_fields.sql (supervisor: 007). Until that migration runs we
    detect their absence on load and simply don't send them (the values stay in the local cache). */
-const OPTIONAL_PROJECT_COLS = ['matter_type', 'is_private', 'created_by', 'supervisor', 'billable'] as const;
+const OPTIONAL_PROJECT_COLS = ['matter_type', 'is_private', 'created_by', 'supervisor'] as const;
 const projectCols = new Set<string>();
 
 export function projectToRow(p: Project) {
@@ -16,7 +16,6 @@ export function projectToRow(p: Project) {
   if (projectCols.has('is_private')) optional.is_private = !!p.isPrivate;
   if (projectCols.has('created_by')) optional.created_by = p.createdBy || null;
   if (projectCols.has('supervisor')) optional.supervisor = p.supervisor || null;
-  if (projectCols.has('billable')) optional.billable = p.billable !== false;
   return {
     ...optional,
     id: p.id, title: p.title, client: p.client, area: p.area,
@@ -38,7 +37,6 @@ export function rowToProject(r: Row): Project {
     ...('is_private' in r ? { isPrivate: !!r.is_private } : {}),
     ...('created_by' in r ? { createdBy: r.created_by || undefined } : {}),
     ...('supervisor' in r ? { supervisor: r.supervisor || undefined } : {}),
-    ...('billable' in r ? { billable: r.billable !== false } : {}),
   };
 }
 export function clientToRow(c: Client) {

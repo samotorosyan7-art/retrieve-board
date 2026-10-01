@@ -23,6 +23,8 @@ export interface TimeLog {
   month: number;
   /** Shown on invoices. Entries logged before migration 009 have no flag and count as billable. */
   billable?: boolean;
+  /** Admins untick a billable entry to leave it off the client's invoice. Missing → on the invoice. */
+  inInvoice?: boolean;
 }
 
 export interface MatterFile {
@@ -50,8 +52,6 @@ export interface Project {
   createdBy?: string;
   /** Member who reviews the task in "Supervisor Review" (migration 007). */
   supervisor?: string;
-  /** Whether the task's billable time goes to Billing & Invoices; admins choose (migration 009). Missing → true. */
-  billable?: boolean;
 }
 
 export interface Client {

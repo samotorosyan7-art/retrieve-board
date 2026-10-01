@@ -447,11 +447,12 @@ function useStoreValue() {
     addActivity(me(), `renamed <b>${p.title}</b> to <b>${title}</b>`);
     return true;
   };
-  const setProjectBillable = (id: string, billable: boolean) => {
-    if (!state.current.currentUser?.isAdmin) { toast(LockIcon, 'Admins only', 'Only admins can choose which tasks are billed.'); return; }
-    const p = patchProject(id, { billable });
-    if (!p) return;
-    addActivity(me(), billable ? `included <b>${p.title}</b> in billing` : `excluded <b>${p.title}</b> from billing`);
+  /** Put a billable time entry on, or take it off, the client's invoice. Admins only (time entries are admin-edit, migration 003). */
+  const setLogInInvoice = (pid: string, index: number, inInvoice: boolean) => {
+    if (!state.current.currentUser?.isAdmin) { toast(LockIcon, 'Admins only', 'Only admins can choose what goes on an invoice.'); return; }
+    const p = state.current.projects.find(x => x.id === pid);
+    if (!p?.timeLogs[index]) return;
+    patchProject(pid, { timeLogs: p.timeLogs.map((l, i) => (i === index ? { ...l, inInvoice } : l)) });
   };
   const archiveProject = (id: string) => {
     setStatus(id, 'archive');
@@ -591,7 +592,7 @@ function useStoreValue() {
     toggleTheme: () => setIsDark(d => !d),
     toast, login, logout, sendPasswordEmail, emp, openPanel, closePanel: () => setSelectedPid(null),
     closeModal: () => setModal(null),
-    addActivity, saveProject, patchProject, setStatus, sendToReview, setSupervisor, setProgress, togglePrivacy, addTimeLog, setAssignees, renameProject, setProjectBillable, createProject, archiveProject, deleteProject,
+    addActivity, saveProject, patchProject, setStatus, sendToReview, setSupervisor, setProgress, togglePrivacy, addTimeLog, setAssignees, renameProject, setLogInInvoice, createProject, archiveProject, deleteProject,
     saveClient, deleteClient, saveMember, deleteMember,
     loadRoom, sendMessage, setActiveChatRoom, clearSavedState,
   };

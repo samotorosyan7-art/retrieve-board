@@ -6,7 +6,7 @@ import { canDeleteMatter, canEditTitle, canMakePrivate, fmtDate, isOD, pri, prog
 import type { Project } from '@/lib/types';
 import { useStore } from './store';
 import { Photo, Tag } from './ui';
-import { ArchiveIcon, CalendarIcon, CheckIcon, CircleCheckIcon, CopyIcon, FileTextIcon, FlagIcon, GlobeIcon, LinkIcon, LockIcon, PaperclipIcon, PencilIcon, ReceiptIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserCheckIcon, UserPlusIcon, XIcon } from 'lucide-react';
+import { ArchiveIcon, CalendarIcon, CheckIcon, CircleCheckIcon, CopyIcon, FileTextIcon, FlagIcon, GlobeIcon, LinkIcon, LockIcon, PaperclipIcon, PencilIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserCheckIcon, UserPlusIcon, XIcon } from 'lucide-react';
 
 export function DetailPanel() {
   const { projects, selectedPid } = useStore();
@@ -21,7 +21,7 @@ export function DetailPanel() {
 function PanelContent({ p }: { p: Project }) {
   const {
     currentUser, team, emp, closePanel, togglePrivacy, setProgress, setStatus, patchProject,
-    addTimeLog, setAssignees, setSupervisor, renameProject, setProjectBillable, addActivity, archiveProject, deleteProject, toast,
+    addTimeLog, setAssignees, setSupervisor, renameProject, addActivity, archiveProject, deleteProject, toast,
   } = useStore();
   const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
   const isOwner = !p.createdBy || p.createdBy === currentUser?.id;
@@ -304,21 +304,6 @@ function PanelContent({ p }: { p: Project }) {
             <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No time logged yet.</div>
           )}
         </div>
-
-        {/* BILLING — admins choose which tasks go to Billing & Invoices. */}
-        {isAdmin && <div className="dp-section">
-          <div className="dp-section-label">Billing</div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text-primary)', cursor: 'pointer' }}>
-            <input
-              type="checkbox" checked={p.billable !== false}
-              onChange={e => {
-                setProjectBillable(p.id, e.target.checked);
-                toast(ReceiptIcon, e.target.checked ? 'Included in billing' : 'Excluded from billing', p.title);
-              }}
-            />
-            Include this task in Billing &amp; Invoices
-          </label>
-        </div>}
 
         {/* FILES */}
         <div className="dp-section">

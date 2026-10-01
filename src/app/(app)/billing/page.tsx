@@ -5,21 +5,23 @@ import { useRouter } from 'next/navigation';
 import { useStore } from '@/components/store';
 import { PageHeader } from '@/components/ui';
 import { LOGO_SRC } from '@/lib/constants';
-import { fmtBill, homePath } from '@/lib/helpers';
-import type { Currency, Project } from '@/lib/types';
+import { fmtBill, homePath, today } from '@/lib/helpers';
+import type { Currency } from '@/lib/types';
 import { CopyIcon, FileTextIcon, LockIcon, MailIcon, PencilIcon, PrinterIcon, Share2Icon, TriangleAlertIcon } from 'lucide-react';
 
+/** 'YYYY-MM' → 'October 2026'. */
+const periodLabel = (period: string) => `${MONTHS[+period.slice(5, 7)]} ${period.slice(0, 4)}`;
 const MONTHS = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-type Entry = { key: string; who: string; hours: number; desc: string; matter: string; empName: string };
-/** A task with billable time this month; its entries reach the invoice only while the task is included in billing. */
-type BillTask = { project: Project; hours: number; entries: Entry[] };
+/** A billable time entry. Every one is listed; only those with `included` are charged on the invoice. */
+type Entry = { key: string; pid: string; index: number; who: string; hours: number; desc: string; matter: string; empName: string; included: boolean };
 
 export default function BillingPage() {
   const { currentUser, projects, emp, billingCurrency, setBillingCurrency, fx, firm, toast } = useStore();
   const router = useRouter();
   const allowed = !!(currentUser?.isBilling || currentUser?.isAdmin);
-  const [month, setMonth] = useState(3);
+  // Billing period as 'YYYY-MM', matched against each entry's date. Starts on the current month.
+  const [period, setPeriod] = useState(() => today().slice(0, 7));
   const [selected, setSelected] = useState<string | null>(null);
   const [invoiceTotal, setInvoiceTotal] = useState(0);
 
@@ -30,24 +32,31 @@ export default function BillingPage() {
     }
   }, [allowed, router, toast]);
 
-  // Clients with billable time logged this month → their tasks. Excluded tasks stay listed so admins can include them again.
+  // Every month that has billable time, plus the current one, newest first.
+  const periods = useMemo(() => {
+    const set = new Set([today().slice(0, 7)]);
+    projects.forEach(p => (p.timeLogs || []).forEach(l => { if (l.billable !== false && l.date) set.add(l.date.slice(0, 7)); }));
+    return [...set].sort().reverse();
+  }, [projects]);
+
+  // Clients with billable time logged in the period → their entries
   const clients = useMemo(() => {
-    const map: Record<string, BillTask[]> = {};
+    const map: Record<string, Entry[]> = {};
     projects.forEach(p => {
-      const entries = (p.timeLogs || [])
-        .map((l, i) => ({ l, i }))
-        .filter(({ l }) => l.month === month && l.billable !== false)
-        .map(({ l, i }) => ({ ...l, key: `${p.id}:${i}`, matter: p.title, empName: emp(l.who)?.name || '' }));
-      if (entries.length) (map[p.client] ||= []).push({ project: p, hours: entries.reduce((s, e) => s + e.hours, 0), entries });
+      (p.timeLogs || []).forEach((l, index) => {
+        if (!l.date?.startsWith(period) || l.billable === false) return;
+        (map[p.client] ||= []).push({
+          ...l, key: `${p.id}:${index}`, pid: p.id, index, matter: p.title, empName: emp(l.who)?.name || '', included: l.inInvoice !== false,
+        });
+      });
     });
     return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [projects, month, emp]);
+  }, [projects, period, emp]);
 
   if (!allowed) return null;
 
   const active = clients.find(([name]) => name === selected) ?? clients[0];
-  const included = (tasks: BillTask[]) => tasks.filter(t => t.project.billable !== false);
-  const hoursOf = (tasks: BillTask[]) => included(tasks).reduce((s, t) => s + t.hours, 0);
+  const hoursOf = (entries: Entry[]) => entries.reduce((s, e) => s + (e.included ? e.hours : 0), 0);
   const monthHours = clients.reduce((s, [, e]) => s + hoursOf(e), 0);
 
   return (
@@ -60,10 +69,8 @@ export default function BillingPage() {
             </button>
           ))}
         </div>
-        <select className="sel" value={month} onChange={e => { setMonth(+e.target.value); setSelected(null); }}>
-          <option value={3}>March 2026</option>
-          <option value={2}>February 2026</option>
-          <option value={1}>January 2026</option>
+        <select className="sel" value={period} onChange={e => { setPeriod(e.target.value); setSelected(null); }}>
+          {periods.map(m => <option key={m} value={m}>{periodLabel(m)}</option>)}
         </select>
       </PageHeader>
 
@@ -72,8 +79,8 @@ export default function BillingPage() {
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
             Clients ({clients.length})
           </div>
-          {clients.length ? clients.map(([name, tasks]) => {
-            const hrs = hoursOf(tasks);
+          {clients.length ? clients.map(([name, entries]) => {
+            const hrs = hoursOf(entries);
             return (
               <div key={name} className={`bill-client-row${active?.[0] === name ? ' active' : ''}`} onClick={() => setSelected(name)}>
                 <div className="bc-dot" style={{ background: hrs > 20 ? '#F87171' : hrs > 10 ? '#FB923C' : '#34D399' }} />
@@ -94,7 +101,7 @@ export default function BillingPage() {
         </div>
         <div className="billing-main-panel">
           {active
-            ? <Invoice key={`${active[0]}-${month}`} client={active[0]} tasks={active[1]} month={month} onTotal={setInvoiceTotal} />
+            ? <Invoice key={`${active[0]}-${period}`} client={active[0]} entries={active[1]} period={period} onTotal={setInvoiceTotal} />
             : <div style={{ color: 'var(--text-tertiary)', padding: 20 }}>Select a client.</div>}
         </div>
       </div>
@@ -102,16 +109,15 @@ export default function BillingPage() {
   );
 }
 
-function Invoice({ client, tasks, month, onTotal }: { client: string; tasks: BillTask[]; month: number; onTotal: (v: number) => void }) {
-  const { currentUser, setProjectBillable, billingCurrency, fx, firm, toast } = useStore();
+function Invoice({ client, entries, period, onTotal }: { client: string; entries: Entry[]; period: string; onTotal: (v: number) => void }) {
+  const { currentUser, setLogInInvoice, billingCurrency, fx, firm, toast } = useStore();
   const isAdmin = !!currentUser?.isAdmin;
-  const entries = tasks.filter(t => t.project.billable !== false).flatMap(t => t.entries);
   const [rates, setRates] = useState<Record<string, string>>({});
-  const invNum = useMemo(() => `INV-${String(month).padStart(2, '0')}-2026-${Math.floor(Math.random() * 900 + 100)}`, [month]);
+  const invNum = useMemo(() => `INV-${period.slice(5, 7)}-${period.slice(0, 4)}-${Math.floor(Math.random() * 900 + 100)}`, [period]);
   const ref = useRef<HTMLDivElement>(null);
   const fmt = (v: number) => (v > 0 ? fmtBill(v, billingCurrency, fx) : '—');
 
-  const amounts = entries.map(e => e.hours * (parseFloat(rates[e.key]) || 0));
+  const amounts = entries.map(e => (e.included ? e.hours * (parseFloat(rates[e.key]) || 0) : 0));
   const sub = amounts.reduce((s, a) => s + a, 0);
   const tax = sub * (firm.vatRate / 100), total = sub + tax;
 
@@ -121,13 +127,14 @@ function Invoice({ client, tasks, month, onTotal }: { client: string; tasks: Bil
     const el = ref.current;
     if (!el) { toast(TriangleAlertIcon, 'No invoice', 'Select a client first.'); return; }
     const clone = el.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll('.inv-actions, .inv-hint').forEach(n => n.remove());
     const live = el.querySelectorAll<HTMLInputElement>('input.inv-rate-input');
     clone.querySelectorAll('input.inv-rate-input').forEach((inp, i) => {
       const span = document.createElement('span');
       span.textContent = live[i]?.value ? fmtBill(parseFloat(live[i].value), billingCurrency, fx) : '—';
       inp.replaceWith(span);
     });
+    // Entries left off the invoice and the on/off column are for the screen only.
+    clone.querySelectorAll('.inv-actions, .inv-hint, .inv-excluded, .inv-pick').forEach(n => n.remove());
     clone.querySelectorAll('img').forEach(img => { img.src = location.origin + LOGO_SRC; });
 
     const w = window.open('', '_blank', 'width=800,height=700');
@@ -146,23 +153,9 @@ function Invoice({ client, tasks, month, onTotal }: { client: string; tasks: Bil
         <PencilIcon size={16} />
         <div>
           <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>Enter hourly rates to calculate invoice</div>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1 }}>Type each attorney&apos;s rate in the Rate column — totals update instantly. Export PDF when ready.</div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1 }}>Type each attorney&apos;s rate in the Rate column — totals update instantly.{isAdmin && ' Untick an entry to leave it off the invoice.'} Export PDF when ready.</div>
         </div>
       </div>
-      {isAdmin && (
-        <div className="inv-hint" style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-lg)', padding: '10px 14px', marginBottom: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-            Tasks to bill ({tasks.filter(t => t.project.billable !== false).length}/{tasks.length})
-          </div>
-          {tasks.map(t => (
-            <label key={t.project.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text-primary)', padding: '4px 0', cursor: 'pointer' }}>
-              <input type="checkbox" checked={t.project.billable !== false} onChange={e => setProjectBillable(t.project.id, e.target.checked)} />
-              <span style={{ flex: 1 }}>{t.project.title}</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--text-secondary)' }}>{t.hours}h</span>
-            </label>
-          ))}
-        </div>
-      )}
       <div className="inv-hdr">
         <div className="inv-from">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -173,25 +166,29 @@ function Invoice({ client, tasks, month, onTotal }: { client: string; tasks: Bil
         <div className="inv-to-block">
           <div className="inv-label">Invoice</div>
           <div className="inv-num">{invNum}</div>
-          <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 8, fontFamily: 'var(--font-mono)' }}>{MONTHS[month]} 2026</div>
+          <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 8, fontFamily: 'var(--font-mono)' }}>{periodLabel(period)}</div>
           <div style={{ fontSize: 10.5, color: 'var(--s-billing)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>{billingCurrency}</div>
         </div>
       </div>
       <div className="inv-client-block">
         <div><div className="icb-to">Billed to</div><div className="icb-name">{client}</div></div>
-        <div className="icb-date">{MONTHS[month]} 2026<br />Due {firm.paymentTerms}</div>
+        <div className="icb-date">{periodLabel(period)}<br />Due {firm.paymentTerms}</div>
       </div>
       <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-lg)', overflow: 'hidden', marginBottom: 14 }}>
         <table className="inv-tbl">
           <thead>
-            <tr><th>Description</th><th>Attorney</th><th>Hours</th><th>Rate ({billingCurrency}/hr)</th><th style={{ textAlign: 'right' }}>Amount</th></tr>
+            <tr><th className="inv-pick" style={{ width: 28 }} title="On invoice" /><th>Description</th><th>Attorney</th><th>Hours</th><th>Rate ({billingCurrency}/hr)</th><th style={{ textAlign: 'right' }}>Amount</th></tr>
           </thead>
           <tbody>
-            {!entries.length && (
-              <tr><td colSpan={5} style={{ color: 'var(--text-tertiary)', textAlign: 'center' }}>No tasks selected for billing.</td></tr>
-            )}
             {entries.map((e, i) => (
-              <tr key={e.key}>
+              <tr key={e.key} className={e.included ? undefined : 'inv-excluded'} style={e.included ? undefined : { opacity: 0.45 }}>
+                <td className="inv-pick">
+                  <input
+                    type="checkbox" checked={e.included} disabled={!isAdmin}
+                    title={isAdmin ? (e.included ? 'On invoice — untick to leave it off' : 'Not on invoice — tick to add it') : 'Only admins choose what goes on the invoice'}
+                    onChange={ev => setLogInInvoice(e.pid, e.index, ev.target.checked)}
+                  />
+                </td>
                 <td>
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{e.desc}</div>
                   <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{e.matter}</div>
@@ -202,7 +199,7 @@ function Invoice({ client, tasks, month, onTotal }: { client: string; tasks: Bil
                   <input
                     type="number" className="input inv-rate-input" placeholder="e.g. 200" min={0} step={10}
                     style={{ width: 110, padding: '5px 8px', fontSize: 12, fontFamily: 'var(--font-mono)' }}
-                    value={rates[e.key] ?? ''} onChange={ev => setRates(r => ({ ...r, [e.key]: ev.target.value }))}
+                    disabled={!e.included} value={rates[e.key] ?? ''} onChange={ev => setRates(r => ({ ...r, [e.key]: ev.target.value }))}
                   />
                 </td>
                 <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-primary)' }}>{fmt(amounts[i])}</td>
