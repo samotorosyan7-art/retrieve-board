@@ -20,20 +20,23 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
   const [priority, setPriority] = useState<PriorityId>('medium');
   const [status, setStatus] = useState<StatusId>('intake');
   const [due, setDue] = useState('');
+  const [dueTime, setDueTime] = useState('');
   const [assignees, setAssignees] = useState<string[]>([]);
+  const [supervisor, setSupervisor] = useState('');
   const [notes, setNotes] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
 
   // One assignee per task: picking someone replaces the previous pick; clicking them again clears it.
   const toggleAssign = (id: string) => {
     setAssignees(a => (a.includes(id) ? [] : [id]));
+    if (supervisor === id) setSupervisor(''); // nobody supervises their own task
   };
   // What the chosen assignee already has on their plate.
   const workload = WORKLOAD_STATUSES.map(s => ({ ...s, n: projects.filter(p => p.status === s.id && p.assignees.includes(assignees[0])).length }));
 
   function submit() {
     if (!title.trim() || !client.trim()) { toast(TriangleAlertIcon, 'Missing info', 'Title and client are required.'); return; }
-    const p = createProject({ title: title.trim(), client: client.trim(), area, matterType, status, priority, assignees, due, notes, isPrivate: isPrivate && canMakePrivate(currentUser) });
+    const p = createProject({ title: title.trim(), client: client.trim(), area, matterType, status, priority, assignees, due, dueTime: (due && dueTime) || undefined, notes, isPrivate: isPrivate && canMakePrivate(currentUser), supervisor: supervisor || undefined });
     closeModal();
     toast(CircleCheckIcon, 'Task created', `"${p.title}" added to the board.`);
   }
@@ -79,7 +82,10 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
             </select>
           </div>
         </div>
-        <div><label className="form-label">Due Date</label><input className="input" type="date" value={due} onChange={e => setDue(e.target.value)} /></div>
+        <div className="form-grid">
+          <div><label className="form-label">Due Date</label><input className="input" type="date" value={due} onChange={e => setDue(e.target.value)} /></div>
+          <div><label className="form-label">Due Time (optional)</label><input className="input" type="time" value={dueTime} disabled={!due} onChange={e => setDueTime(e.target.value)} /></div>
+        </div>
         <div>
           <label className="form-label">Assign To</label>
           <div className="assign-row">
@@ -98,6 +104,13 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
               ))}
             </div>
           )}
+        </div>
+        <div>
+          <label className="form-label">Supervisor (optional)</label>
+          <select className="input sel" value={supervisor} onChange={e => setSupervisor(e.target.value)}>
+            <option value="">— Not set —</option>
+            {team.filter(e => !assignees.includes(e.id)).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
         </div>
         <div>
           <label className="form-label">Notes</label>

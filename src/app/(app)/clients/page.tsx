@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
 import { AvStack, PageHeader, Tag } from '@/components/ui';
-import { clientColor, clientInitials, firstWords, fmtDate, fmtShort, isOpen, pri, stat } from '@/lib/helpers';
+import { clientColor, clientInitials, firstWords, fmtDate, fmtDue, isOpen, pri, stat } from '@/lib/helpers';
 import type { Client } from '@/lib/types';
 import { Building2Icon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 
@@ -193,7 +193,7 @@ function ClientDetail({ c, onDeleted }: { c: Client; onDeleted: () => void }) {
                     {p.assignees.length > 0 && <AvStack ids={p.assignees} size={22} />}
                     <Tag {...pr} />
                     <Tag {...st} />
-                    <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', width: 52, textAlign: 'right' }}>{fmtShort(p.due)}</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', minWidth: 52, textAlign: 'right', whiteSpace: 'nowrap' }}>{fmtDue(p, true)}</div>
                   </div>
                 );
               })}

@@ -1,13 +1,13 @@
 import { DEFAULT_FIRM } from './constants';
 import { getSupabase } from './supabase';
-import type { Activity, ChatMessage, Client, FirmSettings, Member, Project } from './types';
+import type { Activity, ChatMessage, Client, FirmSettings, Member, Project, TaskComment } from './types';
 
 /* ── Row converters (DB snake_case ↔ app camelCase) ── */
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-/* Optional columns — added by supabase/migrations/001_matter_fields.sql (supervisor: 007). Until that migration runs we
+/* Optional columns — added by supabase/migrations/001_matter_fields.sql (supervisor: 007, due_time: 011). Until that migration runs we
    detect their absence on load and simply don't send them (the values stay in the local cache). */
-const OPTIONAL_PROJECT_COLS = ['matter_type', 'is_private', 'created_by', 'supervisor'] as const;
+const OPTIONAL_PROJECT_COLS = ['matter_type', 'is_private', 'created_by', 'supervisor', 'due_time'] as const;
 const projectCols = new Set<string>();
 
 export function projectToRow(p: Project) {
@@ -16,6 +16,7 @@ export function projectToRow(p: Project) {
   if (projectCols.has('is_private')) optional.is_private = !!p.isPrivate;
   if (projectCols.has('created_by')) optional.created_by = p.createdBy || null;
   if (projectCols.has('supervisor')) optional.supervisor = p.supervisor || null;
+  if (projectCols.has('due_time')) optional.due_time = (p.due && p.dueTime) || null;
   return {
     ...optional,
     id: p.id, title: p.title, client: p.client, area: p.area,
@@ -37,6 +38,7 @@ export function rowToProject(r: Row): Project {
     ...('is_private' in r ? { isPrivate: !!r.is_private } : {}),
     ...('created_by' in r ? { createdBy: r.created_by || undefined } : {}),
     ...('supervisor' in r ? { supervisor: r.supervisor || undefined } : {}),
+    ...('due_time' in r ? { dueTime: r.due_time || undefined } : {}),
   };
 }
 export function clientToRow(c: Client) {
@@ -75,6 +77,9 @@ export function memberToRow(m: Member) {
 }
 export function rowToMessage(r: Row): ChatMessage {
   return { id: r.id, room: r.room_id, who: r.sender_id, text: r.content, time: r.created_at };
+}
+export function rowToComment(r: Row): TaskComment {
+  return { id: r.id, projectId: r.project_id, who: r.who, text: r.text, time: r.created_at };
 }
 
 /* ── Reads ── */
@@ -123,6 +128,41 @@ export async function loadChatUnread(): Promise<Record<string, number>> {
 export async function markChatRead(room: string) {
   const { error } = await getSupabase()!.rpc('mark_chat_read', { room });
   if (error) throw error;
+}
+
+/** Comments on one task, oldest first (migration 011). */
+export async function loadComments(projectId: string) {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from('task_comments').select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data || []).map(rowToComment);
+}
+
+export async function addComment(projectId: string, who: string, text: string) {
+  const { data, error } = await getSupabase()!
+    .from('task_comments').insert({ project_id: projectId, who, text }).select('*').single();
+  if (error) throw error;
+  return rowToComment(data);
+}
+
+export async function deleteComment(id: string) {
+  const { data, error } = await getSupabase()!.from('task_comments').delete().eq('id', id).select('id');
+  if (error) throw error;
+  if (!data?.length) throw new Error('Delete from task_comments affected no rows');
+}
+
+/** When each member last signed in (migration 011, admins only): member id → ISO time. */
+export async function loadLastLogins(): Promise<Record<string, string>> {
+  const sb = getSupabase();
+  if (!sb) return {};
+  const { data, error } = await sb.rpc('team_last_login');
+  if (error) throw error;
+  return Object.fromEntries(((data || []) as { member_id: string; last_login: string | null }[])
+    .filter(r => r.last_login).map(r => [r.member_id, r.last_login!]));
 }
 
 /** Firm profile + billing config (migration 006). Missing fields fall back to DEFAULT_FIRM. */

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useStore } from '@/components/store';
 import { AvStack, PageHeader, Tag, cardTitle, muted } from '@/components/ui';
-import { canSeeMatter, fmtDate, isOD, pri, stat, isOpen, parseDate } from '@/lib/helpers';
+import { canSeeMatter, fmtDue, isOD, pri, stat, isOpen, parseDate } from '@/lib/helpers';
 import type { Project } from '@/lib/types';
 import { ChevronLeftIcon, ChevronRightIcon, ClipboardListIcon, TriangleAlertIcon } from 'lucide-react';
 
@@ -25,8 +25,8 @@ export default function CalendarPage() {
   const isCurrentMonth = m === now.getMonth() && y === now.getFullYear();
   const inMonth = (s: string) => { const d = new Date(s); return d.getFullYear() === y && d.getMonth() === m; };
 
-  // Admins see every visible deadline; members only tasks assigned to them.
-  const mine = (p: Project) => canSeeMatter(p, currentUser) && (!!currentUser?.isAdmin || (!!currentUser && p.assignees.includes(currentUser.id)));
+  // Every deadline the signed-in member can see.
+  const mine = (p: Project) => canSeeMatter(p, currentUser);
 
   // Task deadlines grouped by day of month
   const byDate: Record<number, Project[]> = {};
@@ -40,7 +40,7 @@ export default function CalendarPage() {
 
   return (
     <div className="page active" id="page-calendar">
-      <PageHeader title="Task" light="Calendar" sub={`${currentUser?.isAdmin ? 'Deadlines' : 'Your deadlines'} for ${monthName}`}>
+      <PageHeader title="Task" light="Calendar" sub={`Deadlines for ${monthName}`}>
         <button className="btn-ghost" onClick={() => shift(-1)} style={{ padding: '6px 12px' }}><ChevronLeftIcon size={14} /> Prev</button>
         <button className="btn-ghost" onClick={() => { setExpanded(new Set()); setMonth({ m: now.getMonth(), y: now.getFullYear() }); }} style={{ padding: '6px 12px' }}>Today</button>
         <button className="btn-ghost" onClick={() => shift(1)} style={{ padding: '6px 12px' }}>Next <ChevronRightIcon size={14} /></button>
@@ -89,7 +89,7 @@ export default function CalendarPage() {
                 <div style={{ flex: 1, minWidth: 0 }}><div className="urgent-title">{p.title}</div><div className="urgent-client">{p.client}</div></div>
                 <AvStack ids={p.assignees.slice(0, 2)} />
                 <Tag {...pr} />
-                <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtDate(p.due)}</div>
+                <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtDue(p)}</div>
               </div>
             );
           }) : <div style={muted}>No upcoming deadlines this month.</div>}

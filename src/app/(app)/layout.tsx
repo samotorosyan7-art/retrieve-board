@@ -25,7 +25,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (passwordRecovery) router.replace('/reset-password');
   }, [authStatus, passwordRecovery, router]);
 
-  // Members can't open admin pages (Dashboard, Team Workload, Clients, Logs, Settings).
+  // Members can't open admin pages (Logs, Settings).
   useEffect(() => {
     if (!blocked) return;
     toast(LockIcon, 'Access denied', 'That section is for admins only.');
@@ -36,7 +36,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <div id="screen-app" className="screen active">
+      {/* Kanban needs the width: the sidebar shrinks to icons so all columns fit on screen. */}
+      <div id="screen-app" className={`screen active${page === 'kanban' ? ' sb-collapsed' : ''}`}>
         <Sidebar />
         <div className="app-main">
           <Topbar />

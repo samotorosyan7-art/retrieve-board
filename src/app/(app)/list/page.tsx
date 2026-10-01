@@ -4,7 +4,7 @@ import { MatterFilterRow, useMatterFilters } from '@/components/MatterFilters';
 import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
 import { AvStack, PageHeader, Tag } from '@/components/ui';
-import { firstWords, fmtDate, isOD, pri, progColor, stat } from '@/lib/helpers';
+import { firstWords, fmtDue, isOD, pri, progColor, stat } from '@/lib/helpers';
 import { LockIcon, TriangleAlertIcon } from 'lucide-react';
 
 export default function ListPage() {
@@ -56,7 +56,7 @@ export default function ListPage() {
                       </div>
                     </td>
                     <td style={{ fontSize: 11.5, fontFamily: 'var(--font-mono)', color: od ? 'var(--p-high)' : 'var(--text-tertiary)' }}>
-                      {od && <><TriangleAlertIcon size={11} /> </>}{fmtDate(p.due)}
+                      {od && <><TriangleAlertIcon size={11} /> </>}{fmtDue(p)}
                     </td>
                   </tr>
                 );

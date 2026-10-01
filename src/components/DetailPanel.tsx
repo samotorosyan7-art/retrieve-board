@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MATTER_TYPES, PRIORITIES, STATUSES } from '@/lib/constants';
-import { canDeleteMatter, canEditTitle, canMakePrivate, fmtDate, isOD, pri, progColor, stat, today } from '@/lib/helpers';
+import { canDeleteMatter, canEditTitle, canMakePrivate, fmtAgo, fmtDate, fmtDue, isOD, pri, progColor, stat, today } from '@/lib/helpers';
 import type { Project } from '@/lib/types';
 import { useStore } from './store';
 import { Photo, Tag } from './ui';
-import { ArchiveIcon, CalendarIcon, CircleCheckIcon, CopyIcon, FlagIcon, GlobeIcon, LinkIcon, LockIcon, PencilIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserCheckIcon, UserPlusIcon, XIcon } from 'lucide-react';
+import { ArchiveIcon, CalendarIcon, CircleCheckIcon, CopyIcon, FlagIcon, MessageSquareIcon, SendIcon, GlobeIcon, LinkIcon, LockIcon, PencilIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserCheckIcon, UserPlusIcon, XIcon } from 'lucide-react';
 
 export function DetailPanel() {
   const { projects, selectedPid } = useStore();
@@ -22,6 +22,7 @@ function PanelContent({ p }: { p: Project }) {
   const {
     currentUser, team, emp, closePanel, togglePrivacy, setProgress, setStatus, patchProject,
     addTimeLog, setAssignees, setSupervisor, renameProject, addActivity, archiveProject, deleteProject, toast,
+    comments, loadTaskComments, postComment, removeComment,
   } = useStore();
   const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
   const isOwner = !p.createdBy || p.createdBy === currentUser?.id;
@@ -39,6 +40,18 @@ function PanelContent({ p }: { p: Project }) {
   const [tfWho, setTfWho] = useState(currentUser?.id || '');
   const [tfBillable, setTfBillable] = useState(true);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [posting, setPosting] = useState(false);
+  const taskComments = comments[p.id] || [];
+
+  useEffect(() => { loadTaskComments(p.id); }, [p.id, loadTaskComments]);
+
+  async function submitComment() {
+    if (!commentDraft.trim() || posting) return;
+    setPosting(true);
+    if (await postComment(p.id, commentDraft)) setCommentDraft('');
+    setPosting(false);
+  }
 
   function saveTitle() {
     const title = (titleDraft ?? '').trim();
@@ -159,8 +172,8 @@ function PanelContent({ p }: { p: Project }) {
           </div>
         </div>
 
-        {/* SUPERVISOR — chosen when the task moves to Supervisor Review; changeable while it's there. */}
-        {p.status === 'review' && <div className="dp-section">
+        {/* SUPERVISOR — can be set any time; also asked for when the task moves to Supervisor Review. */}
+        <div className="dp-section">
           <div className="dp-section-label">Supervisor</div>
           <select
             className="input sel" value={p.supervisor || ''}
@@ -169,7 +182,7 @@ function PanelContent({ p }: { p: Project }) {
             <option value="">— Not set —</option>
             {team.filter(e => !p.assignees.includes(e.id) || e.id === p.supervisor).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
           </select>
-        </div>}
+        </div>
 
         {/* MATTER TYPE */}
         <div className="dp-section">
@@ -191,9 +204,25 @@ function PanelContent({ p }: { p: Project }) {
               <div className="db-label">Due Date</div>
               <input
                 type="date" value={p.due || ''}
-                style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: 13, fontWeight: 600, color: od ? 'var(--p-high)' : 'var(--text-primary)', fontFamily: 'var(--font-sans)', width: '100%', cursor: 'pointer' }}
-                onChange={e => { patchProject(p.id, { due: e.target.value }); toast(CalendarIcon, 'Due date updated', fmtDate(e.target.value)); }}
+                style={{ ...dueInput, color: od ? 'var(--p-high)' : 'var(--text-primary)' }}
+                onChange={e => {
+                  const due = e.target.value;
+                  // A time only means something with a date.
+                  patchProject(p.id, due ? { due } : { due, dueTime: undefined });
+                  toast(CalendarIcon, 'Due date updated', fmtDue({ due, dueTime: due ? p.dueTime : undefined }));
+                }}
               />
+              {p.due && (
+                <input
+                  type="time" value={p.dueTime || ''} title="Due time (optional)"
+                  style={{ ...dueInput, marginTop: 4, color: od ? 'var(--p-high)' : 'var(--text-secondary)' }}
+                  onChange={e => {
+                    const dueTime = e.target.value || undefined;
+                    patchProject(p.id, { dueTime });
+                    toast(CalendarIcon, 'Due time updated', fmtDue({ due: p.due, dueTime }));
+                  }}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -249,6 +278,44 @@ function PanelContent({ p }: { p: Project }) {
             </button>
           </div>
           <textarea className="input" rows={3} style={{ resize: 'vertical', fontSize: 12.5, lineHeight: 1.6 }} value={notes} onChange={e => setNotes(e.target.value)} />
+        </div>
+
+        {/* COMMENTS */}
+        <div className="dp-section">
+          <div className="dp-section-label">Comments{taskComments.length ? ` · ${taskComments.length}` : ''}</div>
+          {taskComments.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 10 }}>No comments yet.</div>}
+          {taskComments.map(c => {
+            const e = emp(c.who);
+            const canDelete = isAdmin || c.who === currentUser?.id;
+            return (
+              <div key={c.id} className="feed-item">
+                <div className="feed-av" style={{ background: e?.color }}><Photo src={e?.img} /></div>
+                <div className="feed-content" style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span className="feed-text"><span className="bold">{e?.name || 'Former member'}</span></span>
+                    <span className="feed-time" title={new Date(c.time).toLocaleString('en-GB')}>{fmtAgo(c.time)}</span>
+                    {canDelete && (
+                      <button className="btn-ghost" title="Delete comment" style={{ marginLeft: 'auto', padding: '1px 5px' }} onClick={() => removeComment(p.id, c.id)}>
+                        <Trash2Icon size={11} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="feed-text" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{c.text}</div>
+                </div>
+              </div>
+            );
+          })}
+          <textarea
+            className="input" rows={2} placeholder="Write a comment… (⌘/Ctrl + Enter to post)"
+            style={{ resize: 'vertical', fontSize: 12.5, lineHeight: 1.6, marginTop: 8 }}
+            value={commentDraft} onChange={e => setCommentDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submitComment(); } }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+            <button className="btn-solid" style={{ fontSize: 12, padding: '6px 12px' }} disabled={!commentDraft.trim() || posting} onClick={submitComment}>
+              {posting ? <MessageSquareIcon size={12} /> : <SendIcon size={12} />} Post
+            </button>
+          </div>
         </div>
 
         {/* TIME LOG */}
@@ -319,3 +386,8 @@ function PanelContent({ p }: { p: Project }) {
     </>
   );
 }
+
+const dueInput: React.CSSProperties = {
+  background: 'transparent', border: 'none', outline: 'none', fontSize: 13, fontWeight: 600,
+  fontFamily: 'var(--font-sans)', width: '100%', cursor: 'pointer', display: 'block',
+};

@@ -8,17 +8,19 @@ import { pri, stat, isOpen } from '@/lib/helpers';
 import { ArrowRightIcon } from 'lucide-react';
 
 export default function TeamPage() {
-  const { team, projects, openPanel } = useStore();
+  const { team, projects, currentUser, openPanel } = useStore();
   const { go } = useNav();
   const [fe, setFe] = useState('');
-  const shown = fe ? team.filter(e => e.id === fe) : team;
+  // Members don't see admins' workload; admins see everyone.
+  const visibleTeam = currentUser?.isAdmin ? team : team.filter(e => !e.isAdmin);
+  const shown = fe ? visibleTeam.filter(e => e.id === fe) : visibleTeam;
 
   return (
     <div className="page active" id="page-team">
       <PageHeader title="Team" light="Workload" sub="Live view of every attorney's current tasks and capacity">
         <select className="sel" value={fe} onChange={e => setFe(e.target.value)}>
           <option value="">All members</option>
-          {team.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+          {visibleTeam.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
         </select>
       </PageHeader>
 

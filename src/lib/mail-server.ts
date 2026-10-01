@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { fmtDate } from './helpers';
+import { fmtDue } from './helpers';
 import { PRIORITIES } from './constants';
 
 /* Shared by the /api notify + cron routes. Server-only: RESEND_API_KEY must never reach the browser.
@@ -14,7 +14,7 @@ export const setPasswordLink = (appUrl: string, props: { hashed_token: string; v
 
 export const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
-export type MatterRow = { id: string; title: string; client: string | null; due_date: string | null; priority: string | null; notes: string | null };
+export type MatterRow = { id: string; title: string; client: string | null; due_date: string | null; due_time?: string | null; priority: string | null; notes: string | null };
 
 /* ── Email layout ──
    Email clients ignore <style> blocks and modern CSS unevenly, so everything is tables + inline styles,
@@ -85,7 +85,7 @@ export async function sendMatterEmail(opts: {
   const first = to.name.split(' ')[0];
   const title = m.title.slice(0, 300);
   const pr = PRIORITIES.find(x => x.id === m.priority) ?? PRIORITIES[1];
-  const due = m.due_date ? fmtDate(m.due_date) : 'No deadline';
+  const due = m.due_date ? fmtDue({ due: m.due_date, dueTime: m.due_time || undefined }) : 'No deadline';
   const notes = (m.notes || '').slice(0, 5000);
   const taskUrl = `${appUrl}/list?task=${encodeURIComponent(m.id)}`;
 

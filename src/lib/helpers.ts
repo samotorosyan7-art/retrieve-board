@@ -15,9 +15,19 @@ export const isOpen = (p: Project) => p.status !== 'done' && p.status !== 'archi
 /** Dashboard "Urgent & Overdue": open and either overdue or high priority. */
 export const isUrgent = (p: Project) => isOpen(p) && (p.priority === 'high' || isOD(p));
 
+/** The due date, at its due time if one is set (otherwise the start of that day). */
+export const dueAt = (p: Pick<Project, 'due' | 'dueTime'>) => {
+  const d = parseDate(p.due);
+  if (d && p.dueTime) {
+    const [h, m] = p.dueTime.split(':').map(Number);
+    d.setHours(h || 0, m || 0);
+  }
+  return d;
+};
+
 export const isOD = (p: Project) => {
   if (p.status === 'done' || p.status === 'archive' || !p.due) return false;
-  const d = parseDate(p.due);
+  const d = dueAt(p);
   return !!d && d < new Date();
 };
 export const progColor = (v: number) => (v >= 80 ? '#34D399' : v >= 40 ? '#FB923C' : '#F87171');
@@ -31,6 +41,22 @@ export const fmtShort = (d: string) => {
   const dt = parseDate(d);
   return dt ? dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—';
 };
+/** Due date plus its time when set: "1 Oct 2026, 14:00" (short: "1 Oct, 14:00"). */
+export const fmtDue = (p: Pick<Project, 'due' | 'dueTime'>, short = false) => {
+  const d = (short ? fmtShort : fmtDate)(p.due);
+  return p.due && p.dueTime ? `${d}, ${p.dueTime}` : d;
+};
+
+/** "Just now", "5m ago", "3h ago", "2d ago", then the date. */
+export const fmtAgo = (iso: string) => {
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return 'Just now';
+  if (m < 60) return m + 'm ago';
+  if (m < 1440) return Math.floor(m / 60) + 'h ago';
+  if (m < 1440 * 30) return Math.floor(m / 1440) + 'd ago';
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
 export const fmtMoney = (v: number) =>
   '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -98,7 +124,7 @@ export function makeInitials(name: string, taken: string[]) {
 }
 
 /** Pages only admins can open; members are sent to their own tasks. */
-export const ADMIN_PAGES = ['dashboard', 'team', 'clients', 'logs', 'settings'];
+export const ADMIN_PAGES = ['logs', 'settings'];
 /** Where a member lands after signing in or being turned away from a page. */
 export const homePath = (user: Member | null) => (user?.isAdmin ? '/dashboard' : '/tasks');
 /** Only admins make tasks private (members may still make their own private task public). */

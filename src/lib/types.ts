@@ -43,6 +43,8 @@ export interface Project {
   progress: number;
   assignees: string[];
   due: string;
+  /** Optional time of day for `due`, 'HH:MM' (migration 011). */
+  dueTime?: string;
   created: string;
   notes: string;
   timeLogs: TimeLog[];
@@ -70,6 +72,14 @@ export interface Client {
 export interface Activity {
   who: string;
   /** May contain <b> tags — always render through sanitizeActivity(). */
+  text: string;
+  time: string;
+}
+
+export interface TaskComment {
+  id: string;
+  projectId: string;
+  who: string;
   text: string;
   time: string;
 }

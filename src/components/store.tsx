@@ -3,15 +3,16 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { CHAT_ROOMS, DEFAULT_FIRM } from '@/lib/constants';
 import {
-  loadAll, loadChatUnread, loadFirmSettings, loadMessages, markChatRead, saveFirmSettings, rowToActivity, rowToClient, rowToMember, rowToMessage, rowToProject, write, type Mutation,
+  addComment, deleteComment, loadAll, loadChatUnread, loadComments, loadFirmSettings, loadLastLogins, loadMessages, markChatRead, saveFirmSettings,
+  rowToActivity, rowToClient, rowToComment, rowToMember, rowToMessage, rowToProject, write, type Mutation,
 } from '@/lib/db';
 import { sendMatterAssignmentEmail } from '@/lib/email';
 import { canDeleteMatter, canEditTitle, canMakePrivate, dmRoom, stat, today } from '@/lib/helpers';
 import { getSupabase } from '@/lib/supabase';
 import type {
-  Activity, ChatMessage, Client, Currency, FirmSettings, Member, Project, StatusId, SyncState, TimeLog,
+  Activity, ChatMessage, Client, Currency, FirmSettings, Member, Project, StatusId, SyncState, TaskComment, TimeLog,
 } from '@/lib/types';
-import { ArchiveIcon, GlobeIcon, LockIcon, MailIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
+import { ArchiveIcon, MessageSquareIcon, GlobeIcon, LockIcon, MailIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /* ── localStorage: theme (always) + a per-user data cache for instant paint, wiped on sign-out ── */
@@ -65,6 +66,10 @@ function useStoreValue() {
   // Signed in from a password-reset link and hasn't chosen a new password yet (see /reset-password).
   const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [chatUnreadByRoom, setChatUnreadByRoom] = useState<Record<string, number>>({});
+  // Comments per task, loaded when its panel opens (migration 011) and kept live by realtime.
+  const [comments, setComments] = useState<Record<string, TaskComment[]>>({});
+  // Member id → last sign-in time (admins only, migration 011). null until loaded.
+  const [lastLogins, setLastLogins] = useState<Record<string, string> | null>(null);
 
   const currentUser = (sessionEmail && team.find(e => e.email.toLowerCase() === sessionEmail)) || null;
   const currentUserId = currentUser?.id ?? null;
@@ -77,6 +82,8 @@ function useStoreValue() {
 
   // Refs so async callbacks (realtime, debounces) always see fresh state.
   const state = useRef({ projects, clients, currentUser, team });
+  const sessionRef = useRef(sessionEmail);
+  sessionRef.current = sessionEmail;
   state.current = { projects, clients, currentUser, team };
   // The chat room currently on screen, if any — its messages are read as they arrive.
   const activeChatRoom = useRef<string | null>(null);
@@ -166,12 +173,14 @@ function useStoreValue() {
       setProjects(data.projects.map(p => {
         const old = prev.get(p.id);
         // Columns missing from the DB (before the migration) fall back to this browser's copy.
-        return old ? { matterType: old.matterType, isPrivate: old.isPrivate, createdBy: old.createdBy, supervisor: old.supervisor, ...p } : p;
+        return old ? { matterType: old.matterType, isPrivate: old.isPrivate, createdBy: old.createdBy, supervisor: old.supervisor, dueTime: old.dueTime, ...p } : p;
       }));
       setClients(data.clients);
       setActivity(data.activity);
       // Separate from loadAll so the app still works before migration 006 is run.
       loadFirmSettings().then(setFirm).catch(e => console.warn('Firm settings unavailable (has migration 006 been run?)', e));
+      const user = data.team.find(m => m.email === sessionRef.current);
+      if (user?.isAdmin) loadLastLogins().then(setLastLogins).catch(e => console.warn('Last logins unavailable (has migration 011 been run?)', e));
     } catch (e) {
       console.warn('DB load error — using local cache', e);
       setSync('error');
@@ -204,7 +213,7 @@ function useStoreValue() {
   // While signed in: cached data → live data → realtime. On sign-out: clear everything.
   useEffect(() => {
     if (!sessionEmail) {
-      setTeam([]); setProjects([]); setClients([]); setActivity([]); setChatMessages({}); setChatUnreadByRoom({});
+      setTeam([]); setProjects([]); setClients([]); setActivity([]); setChatMessages({}); setChatUnreadByRoom({}); setComments({}); setLastLogins(null);
       setTeamLoaded(false); setSelectedPid(null); setModal(null);
       return;
     }
@@ -218,7 +227,7 @@ function useStoreValue() {
     const sb = getSupabase();
     if (!sb) return;
     const channel = sb.channel('retrieve-live');
-    for (const table of ['team_members', 'projects', 'clients', 'activity']) {
+    for (const table of ['team_members', 'projects', 'clients', 'activity', 'task_comments']) {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, payload => applyRealtime(table, payload));
     }
     let connectedOnce = false;
@@ -241,6 +250,17 @@ function useStoreValue() {
       setActivity(list => [rowToActivity(row), ...list].slice(0, 20));
       return;
     }
+    if (table === 'task_comments') {
+      if (payload.eventType === 'DELETE') {
+        setComments(all => Object.fromEntries(Object.entries(all).map(([pid, list]) => [pid, list.filter(c => c.id !== id)])));
+      } else if (payload.eventType === 'INSERT') {
+        const c = rowToComment(row);
+        // Only tasks whose comments are loaded; the rest load fresh when opened.
+        setComments(all => (!all[c.projectId] || all[c.projectId].some(x => x.id === c.id) ? all
+          : { ...all, [c.projectId]: [...all[c.projectId], c] }));
+      }
+      return;
+    }
     if (!id || dirty.current.has(`${table}:${id}`)) return;
 
     const upsertOrDelete = <T extends { id: string }>(list: T[], item: T | null): T[] => {
@@ -258,7 +278,7 @@ function useStoreValue() {
       setProjects(ps => {
         const old = ps.find(x => x.id === id);
         const next = isDelete ? null : rowToProject(row);
-        return upsertOrDelete(ps, next && old ? { matterType: old.matterType, isPrivate: old.isPrivate, createdBy: old.createdBy, supervisor: old.supervisor, ...next } : next);
+        return upsertOrDelete(ps, next && old ? { matterType: old.matterType, isPrivate: old.isPrivate, createdBy: old.createdBy, supervisor: old.supervisor, dueTime: old.dueTime, ...next } : next);
       });
       if (isDelete) setSelectedPid(cur => (cur === id ? null : cur));
     } else if (table === 'clients') {
@@ -372,10 +392,12 @@ function useStoreValue() {
     if (patch.assignees) notifyAssigned(saved, id, patch.assignees.filter(a => !p.assignees.includes(a)));
     return next;
   };
-  /** Returns whether the status changed now. Supervisor Review first asks who reviews it (see sendToReview). */
+  /** Returns whether the status changed now. Supervisor Review first asks who reviews it (see sendToReview).
+   *  Leaving Supervisor Review removes the supervisor. */
   const setStatus = (id: string, status: StatusId) => {
     if (status === 'review') { setModal({ kind: 'supervisor', pid: id }); return false; }
-    const p = patchProject(id, { status });
+    const leavingReview = state.current.projects.find(x => x.id === id)?.status === 'review';
+    const p = patchProject(id, leavingReview ? { status, supervisor: undefined } : { status });
     if (!p) return false;
     addActivity(me(), `moved <b>${p.title}</b> to ${stat(status).label}`);
     return true;
@@ -479,13 +501,55 @@ function useStoreValue() {
       },
     });
   };
-  const createProject = (data: Pick<Project, 'title' | 'client' | 'area' | 'status' | 'priority' | 'assignees' | 'due' | 'notes' | 'isPrivate' | 'matterType' | 'supervisor'>) => {
+  const createProject = (data: Pick<Project, 'title' | 'client' | 'area' | 'status' | 'priority' | 'assignees' | 'due' | 'dueTime' | 'notes' | 'isPrivate' | 'matterType' | 'supervisor'>) => {
     const p: Project = {
       ...data, id: 'p' + Date.now(), progress: 0, created: today(), timeLogs: [], files: [], createdBy: me(),
     };
     notifyAssigned(saveProject(p), p.id, p.assignees);
     addActivity(me(), `created task <b>${p.title}</b>`);
     return p;
+  };
+
+  /* ── Task comments ── */
+  const loadTaskComments = useCallback(async (pid: string) => {
+    try {
+      const list = await loadComments(pid);
+      setComments(all => ({ ...all, [pid]: list }));
+    } catch (e) { console.warn('Comments unavailable (has migration 011 been run?)', e); }
+  }, []);
+  /** Returns whether it saved. */
+  const postComment = async (pid: string, text: string) => {
+    const who = me();
+    const p = state.current.projects.find(x => x.id === pid);
+    if (!who || !p || !text.trim()) return false;
+    try {
+      const c = await addComment(pid, who, text.trim());
+      setComments(all => ({ ...all, [pid]: (all[pid] || []).some(x => x.id === c.id) ? all[pid] : [...(all[pid] || []), c] }));
+      addActivity(who, `commented on <b>${p.title}</b>`);
+      return true;
+    } catch (e) {
+      console.warn('Comment error', e);
+      toast(TriangleAlertIcon, 'Comment not posted', 'Please try again.');
+      return false;
+    }
+  };
+  const removeComment = (pid: string, id: string) => {
+    setConfirmState({
+      title: 'Delete comment?',
+      msg: 'This comment will be permanently removed.',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setComments(all => ({ ...all, [pid]: (all[pid] || []).filter(c => c.id !== id) }));
+        try {
+          await deleteComment(id);
+          toast(MessageSquareIcon, 'Comment deleted');
+        } catch (e) {
+          console.warn('Comment delete error', e);
+          toast(TriangleAlertIcon, 'Delete failed', 'The comment could not be removed — it has been restored.');
+          loadTaskComments(pid);
+        }
+      },
+    });
   };
 
   /* ── Clients ── */
@@ -595,6 +659,7 @@ function useStoreValue() {
     addActivity, saveProject, patchProject, setStatus, sendToReview, setSupervisor, setProgress, togglePrivacy, addTimeLog, setAssignees, renameProject, setLogInInvoice, createProject, archiveProject, deleteProject,
     saveClient, deleteClient, saveMember, deleteMember,
     loadRoom, sendMessage, setActiveChatRoom, clearSavedState,
+    comments, loadTaskComments, postComment, removeComment, lastLogins,
   };
 }
 

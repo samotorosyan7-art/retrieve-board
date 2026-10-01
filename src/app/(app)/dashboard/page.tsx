@@ -4,11 +4,11 @@ import { byDate } from '@/components/MatterFilters';
 import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
 import { AvStack, Photo, Tag, cardTitle } from '@/components/ui';
-import { canSeeMatter, firstWords, fmtShort, isOD, isUrgent, pri, sanitizeActivity, stat, utilColor, isOpen } from '@/lib/helpers';
+import { canSeeMatter, firstWords, fmtAgo, fmtDue, isOD, isUrgent, pri, sanitizeActivity, stat, utilColor, isOpen } from '@/lib/helpers';
 import { ArrowRightIcon, PartyPopperIcon, TriangleAlertIcon } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { projects, team, activity, currentUser, emp, openPanel } = useStore();
+  const { projects, team, activity, currentUser, emp, openPanel, lastLogins } = useStore();
   const { go } = useNav();
 
   // Each KPI opens All Tasks with the same filter, so the list matches the number.
@@ -71,7 +71,7 @@ export default function DashboardPage() {
                   </div>
                   <AvStack ids={p.assignees.slice(0, 2)} />
                   <Tag {...pr} />
-                  <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)' }}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtShort(p.due)}</div>
+                  <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)' }}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtDue(p, true)}</div>
                 </div>
               );
             }) : (
@@ -106,6 +106,14 @@ export default function DashboardPage() {
                     <div className="util-emp">
                       <div className="util-empav"><Photo src={e.img} /></div>
                       <span className="util-name">{e.name.split(' ')[0]}</span>
+                      {lastLogins && (
+                        <span
+                          style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginLeft: 6 }}
+                          title={lastLogins[e.id] ? `Last login: ${new Date(lastLogins[e.id]).toLocaleString('en-GB')}` : 'Has not logged in yet'}
+                        >
+                          · {lastLogins[e.id] ? `last login ${fmtAgo(lastLogins[e.id]).replace('Just now', 'just now')}` : 'never logged in'}
+                        </span>
+                      )}
                     </div>
                     <span className="util-hrs" style={{ color: col }}>{active} active</span>
                   </div>

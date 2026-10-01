@@ -5,7 +5,7 @@ import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
 import { AvStack, PageHeader, Tag } from '@/components/ui';
 import { STATUSES } from '@/lib/constants';
-import { canMakePrivate, firstWords, fmtShort, isOD, pri, progColor, stat } from '@/lib/helpers';
+import { canMakePrivate, firstWords, fmtDue, isOD, pri, progColor, stat } from '@/lib/helpers';
 import type { StatusId } from '@/lib/types';
 import { GlobeIcon, LockIcon, MoveIcon, TriangleAlertIcon } from 'lucide-react';
 
@@ -162,7 +162,7 @@ export default function KanbanPage() {
                       <div className="mc-pbar"><div className="pbar"><div className="pbar-fill" style={{ width: `${p.progress}%`, background: progColor(p.progress) }} /></div></div>
                       <div className="mc-foot">
                         <AvStack ids={p.assignees.slice(0, 3)} withInitials />
-                        <div className={`mc-due${od ? ' overdue' : ''}`}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtShort(p.due)}</div>
+                        <div className={`mc-due${od ? ' overdue' : ''}`}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtDue(p, true)}</div>
                       </div>
                       <div className="mc-area" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>{p.matterType ? `${p.matterType} · ` : ''}{firstWords(p.area, 3)}</span>

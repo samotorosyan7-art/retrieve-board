@@ -13,7 +13,7 @@ export const STATUSES: { id: StatusId; label: string; col: string; bg: string }[
   {id:"archive",   label:"Archive",                 col:"#94A3B8",bg:"rgba(148,163,184,0.12)"},
 ];
 
-export const MATTER_TYPES = ["General Corporate","Work Permit","Banking","Contracts","Legal Advice"];
+export const MATTER_TYPES = ["General Corporate","Work Permit","Banking","Contracts","Legal Advice","Project"];
 export const PRIORITIES: { id: PriorityId; label: string; col: string; bg: string }[] = [
   {id:"high",  label:"High",  col:"#F87171",bg:"rgba(248,113,113,0.12)"},
   {id:"medium",label:"Medium",   col:"#FB923C",bg:"rgba(251,146,60,0.12)"},

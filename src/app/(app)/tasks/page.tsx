@@ -1,15 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import { byDate } from '@/components/MatterFilters';
 import { useStore } from '@/components/store';
 import { AvStack, PageHeader, Tag } from '@/components/ui';
-import { firstWords, fmtShort, isOD, isOpen, pri, progColor, stat } from '@/lib/helpers';
+import { firstWords, fmtDue, isOD, isOpen, pri, progColor, stat } from '@/lib/helpers';
 import type { Project } from '@/lib/types';
 import { PartyPopperIcon, TriangleAlertIcon } from 'lucide-react';
 
 export default function TasksPage() {
   const { projects, currentUser, openPanel, selectedPid } = useStore();
   const [showDone, setShowDone] = useState(false);
+  const byDue = byDate('due', 1, '9999-12-31');
 
   // Tasks assigned to me — overdue first, then by due date.
   const assigned = projects.filter(p => !!currentUser && p.assignees.includes(currentUser.id));
@@ -17,12 +19,12 @@ export default function TasksPage() {
   const assignedDone = assigned.filter(p => !isOpen(p));
   const assignedShown = [...(showDone ? assignedDone : assignedOpen)].sort((a, b) => {
     if (isOD(a) !== isOD(b)) return isOD(a) ? -1 : 1;
-    return new Date(a.due || '9999-12-31').getTime() - new Date(b.due || '9999-12-31').getTime();
+    return byDue(a, b);
   });
 
-  // Tasks waiting for me as supervisor.
-  const toReview = projects.filter(p => !!currentUser && p.status === 'review' && p.supervisor === currentUser.id)
-    .sort((a, b) => new Date(a.due || '9999-12-31').getTime() - new Date(b.due || '9999-12-31').getTime());
+  // Open tasks I'm the supervisor of, whatever their status — ones already in Supervisor Review first.
+  const toReview = projects.filter(p => !!currentUser && p.supervisor === currentUser.id && isOpen(p))
+    .sort((a, b) => (a.status === 'review') !== (b.status === 'review') ? (a.status === 'review' ? -1 : 1) : byDue(a, b));
 
   const row = (p: Project) => {
     const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
@@ -39,7 +41,7 @@ export default function TasksPage() {
         <AvStack ids={p.assignees.slice(0, 3)} />
         <Tag {...pr} />
         <Tag {...st} />
-        <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)', width: 64, textAlign: 'right' }}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtShort(p.due)}</div>
+        <div className="urgent-due" style={{ color: od ? '#F87171' : 'var(--text-tertiary)', minWidth: 64, textAlign: 'right', whiteSpace: 'nowrap' }}>{od && <><TriangleAlertIcon size={11} /> </>}{fmtDue(p, true)}</div>
       </div>
     );
   };

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AREAS, MATTER_TYPES, PRIORITIES, STATUSES } from '@/lib/constants';
-import { canSeeMatter, firstWords, isOD, isOpen, isUrgent } from '@/lib/helpers';
+import { canSeeMatter, dueAt, firstWords, isOD, isOpen, isUrgent, parseDate } from '@/lib/helpers';
 import type { Project } from '@/lib/types';
 import { useStore } from './store';
 import { XIcon } from 'lucide-react';
@@ -11,8 +11,14 @@ import { XIcon } from 'lucide-react';
 type Filters = { client: string; type: string; emp: string; area: string; pri: string; stat: string; sort: string };
 const EMPTY: Filters = { client: '', type: '', emp: '', area: '', pri: '', stat: '', sort: '' };
 
-export const byDate = (key: 'due' | 'created', dir: 1 | -1, fallback: string) =>
-  (a: Project, b: Project) => dir * (new Date(a[key] || fallback).getTime() - new Date(b[key] || fallback).getTime());
+/** Due dates sort by their time too; tasks without one use `fallback`. */
+export const byDate = (key: 'due' | 'created', dir: 1 | -1, fallback: string) => {
+  const t = (p: Project) => {
+    const v = (key === 'due' ? dueAt(p) : parseDate(p.created))?.getTime();
+    return v === undefined || isNaN(v) ? new Date(fallback).getTime() : v;
+  };
+  return (a: Project, b: Project) => dir * (t(a) - t(b));
+};
 
 /** Filters seeded from the URL, e.g. /list?emp=<id> (Team Workload), /list?stat=overdue (Dashboard KPIs), /list?sort=deadline-desc. */
 const fromParams = (q: URLSearchParams): Filters =>
@@ -91,10 +97,11 @@ export function MatterFilterRow({
       {withStatus && (
         <select className="sel" {...bind('stat')}>
           <option value="">All statuses</option>
-          <option value="open">Open (not completed)</option>
           <option value="overdue">Overdue</option>
-          <option value="urgent">Urgent &amp; overdue</option>
           {STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+          {/* Not offered in the list, but the dashboard links here with them — show the one in use. */}
+          {filters.stat === 'open' && <option value="open">Open (not completed)</option>}
+          {filters.stat === 'urgent' && <option value="urgent">Urgent &amp; overdue</option>}
         </select>
       )}
       <select className="sel" {...bind('sort')} style={{ minWidth: 130 }}>

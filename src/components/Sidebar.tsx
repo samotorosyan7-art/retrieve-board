@@ -20,12 +20,12 @@ export function Sidebar() {
 
   const isAdmin = !!currentUser.isAdmin;
   const isBilling = !!(currentUser.isBilling || currentUser.isAdmin);
-  // Open tasks assigned to me, plus tasks waiting for my review as supervisor.
-  const pendingTasks = projects.filter(p => (isOpen(p) && p.assignees.includes(currentUser.id)) || (p.status === 'review' && p.supervisor === currentUser.id)).length;
+  // Open tasks assigned to me or supervised by me (matches My Tasks).
+  const pendingTasks = projects.filter(p => isOpen(p) && (p.assignees.includes(currentUser.id) || p.supervisor === currentUser.id)).length;
   const myTasks = { id: 'tasks', icon: ListChecksIcon, label: 'My Tasks', badge: pendingTasks };
 
   const link = (n: NavItem) => (
-    <div key={n.id} className={`nav-link${page === n.id ? ' active' : ''}`} onClick={() => go(n.id)} data-page={n.id}>
+    <div key={n.id} className={`nav-link${page === n.id ? ' active' : ''}`} onClick={() => go(n.id)} data-page={n.id} title={n.label}>
       <span className="nl-icon"><n.icon size={15} /></span>
       <span className="nl-label">{n.label}</span>
       {!!n.badge && <span className="nl-badge" style={n.badgeStyle}>{n.badge}</span>}
@@ -38,7 +38,7 @@ export function Sidebar() {
         <div className="sb-brand">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="sb-logo-img" src={LOGO_SRC} alt="R" />
-          <div><div className="sb-firm">Retrieve</div><div className="sb-city">Legal &amp; Tax · Yerevan</div></div>
+          <div className="sb-brand-text"><div className="sb-firm">Retrieve</div><div className="sb-city">Legal &amp; Tax · Yerevan</div></div>
         </div>
         <div className="sb-search">
           <input placeholder="Search tasks…" value={search} onChange={e => setSearch(e.target.value)} />
@@ -46,14 +46,14 @@ export function Sidebar() {
       </div>
       <div className="sb-nav">
         <div className="sb-section">Overview</div>
-        {isAdmin && link({ id: 'dashboard', icon: LayoutDashboardIcon, label: 'Dashboard' })}
+        {link({ id: 'dashboard', icon: LayoutDashboardIcon, label: 'Dashboard' })}
         {link(myTasks)}
         <div className="sb-section">Tasks</div>
         {link({ id: 'kanban', icon: SquareKanbanIcon, label: 'Kanban Board' })}
         {link({ id: 'list', icon: ListIcon, label: 'All Tasks' })}
         {link({ id: 'calendar', icon: CalendarIcon, label: 'Calendar' })}
-        {isAdmin && link({ id: 'clients', icon: Building2Icon, label: 'Clients' })}
-        {isAdmin && link({ id: 'team', icon: UsersIcon, label: 'Team Workload' })}
+        {link({ id: 'clients', icon: Building2Icon, label: 'Clients' })}
+        {link({ id: 'team', icon: UsersIcon, label: 'Team Workload' })}
         {isAdmin && link({ id: 'logs', icon: TimerIcon, label: 'Logs' })}
         {link({ id: 'chat', icon: MessagesSquareIcon, label: 'Team Chat', badge: chatUnread })}
         {isBilling && (
@@ -82,7 +82,7 @@ export function Sidebar() {
             </div>
           )}
         </div>
-        <div><div className="sb-user-name">{currentUser.name}</div><div className="sb-user-role">{currentUser.role}</div></div>
+        <div className="sb-user-info"><div className="sb-user-name">{currentUser.name}</div><div className="sb-user-role">{currentUser.role}</div></div>
         <div className="sb-actions">
           <button className="sb-icon-btn" onClick={toggleTheme} title="Toggle theme">{isDark ? <MoonIcon size={13} /> : <SunIcon size={13} />}</button>
           <button className="sb-icon-btn" onClick={() => router.push('/reset-password')} title="Change password"><KeyRoundIcon size={13} /></button>
