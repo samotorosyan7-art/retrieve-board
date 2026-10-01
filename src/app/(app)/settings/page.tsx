@@ -7,13 +7,10 @@ import { homePath } from '@/lib/helpers';
 import { PageHeader, Photo } from '@/components/ui';
 import { PAYMENT_TERMS } from '@/lib/constants';
 import type { FirmSettings } from '@/lib/types';
-import { BanknoteIcon, BellIcon, CalendarIcon, FileSignatureIcon, HardDriveIcon, LandmarkIcon, LinkIcon, LockIcon, MailIcon, PencilIcon, PlugIcon, PlusIcon, SaveIcon, SendIcon, SheetIcon, Trash2Icon, TriangleAlertIcon, UsersIcon } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { BanknoteIcon, LandmarkIcon, LockIcon, PencilIcon, PlusIcon, SaveIcon, Trash2Icon, TriangleAlertIcon, UsersIcon } from 'lucide-react';
 
 const PANELS = [
   { id: 'users', icon: UsersIcon, label: 'Team & Access' },
-  { id: 'notif', icon: BellIcon, label: 'Notifications' },
-  { id: 'integrations', icon: PlugIcon, label: 'Integrations' },
   { id: 'billing-cfg', icon: BanknoteIcon, label: 'Billing Config' },
   { id: 'firm', icon: LandmarkIcon, label: 'Firm Profile' },
 ];
@@ -42,8 +39,6 @@ export default function SettingsPage() {
         </div>
         <div className="settings-content-panel">
           {panel === 'users' && <UsersPanel />}
-          {panel === 'notif' && <NotifPanel />}
-          {panel === 'integrations' && <IntegrationsPanel />}
           {panel === 'billing-cfg' && <BillingConfigPanel />}
           {panel === 'firm' && <FirmPanel />}
         </div>
@@ -87,67 +82,6 @@ function UsersPanel() {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-const NOTIFS: [string, string, boolean][] = [
-  ['Task assigned to me', 'You receive an email when a task is assigned to your account', true],
-  ['Task deadline (48h)', 'Alert when a deadline is within 48 hours', true],
-  ['Status change', "Alert when a task you're on changes status", false],
-  ['File uploaded', 'Alert when a file is added to your task', false],
-  ['New task assigned', 'Alert when added to a new task', true],
-  ['Invoice dispatched', 'Confirmation when billing report is sent', true],
-  ['Weekly digest (Monday)', 'Summary of your active tasks and upcoming deadlines', false],
-];
-
-function NotifPanel() {
-  const { toast } = useStore();
-  return (
-    <div className="settings-section">
-      <div className="ss-title">Email Notifications</div>
-      <div className="ss-sub">Configure when your team receives automatic alerts.</div>
-      {NOTIFS.map(([name, desc, on]) => (
-        <div key={name} className="toggle-row">
-          <div className="tr-info"><div className="tr-name">{name}</div><div className="tr-desc">{desc}</div></div>
-          <label className="toggle" style={{ position: 'relative' }}>
-            <input type="checkbox" defaultChecked={on} onChange={() => toast(BellIcon, 'Saved', 'Notification preference updated.')} />
-            <div className="toggle-track" /><div className="toggle-thumb" />
-          </label>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-const INTEGRATIONS: { icon: LucideIcon; name: string; desc: React.ReactNode; connected: boolean }[] = [
-  { icon: HardDriveIcon, name: 'Google Drive', desc: "Auto-sync uploaded files to the firm's shared Drive folder.", connected: true },
-  {
-    icon: MailIcon, name: 'Email (Resend)', connected: true,
-    desc: <>Send email notifications when tasks are assigned. <a href="https://resend.com" target="_blank" rel="noreferrer" style={{ color: 'var(--s-billing)' }}>Manage at resend.com →</a></>,
-  },
-  { icon: CalendarIcon, name: 'Google Calendar', desc: 'Sync task deadlines with your Google Calendar.', connected: false },
-  { icon: SheetIcon, name: 'Google Sheets', desc: 'Export billing data automatically to Sheets.', connected: false },
-  { icon: SendIcon, name: 'Telegram Bot', desc: 'Receive task notifications in Telegram.', connected: false },
-  { icon: FileSignatureIcon, name: 'DocuSign', desc: 'Send contracts for e-signature from any task.', connected: false },
-];
-
-function IntegrationsPanel() {
-  const { toast } = useStore();
-  return (
-    <div className="settings-section">
-      <div className="ss-title">Connected Services</div>
-      <div className="ss-sub">Sync Retrieve PM with your existing tools.</div>
-      {INTEGRATIONS.map(i => (
-        <div key={i.name} className="integ-row">
-          <div className="integ-icon"><i.icon size={22} /></div>
-          <div className="integ-info"><div className="integ-name">{i.name}</div><div className="integ-desc">{i.desc}</div></div>
-          <div className={`integ-status ${i.connected ? 'connected' : 'disconnected'}`}>{i.connected ? '● Connected' : '○ Connect'}</div>
-          <button className="ur-action" onClick={() => toast(LinkIcon, i.name, i.connected ? 'Disconnecting…' : 'OAuth flow required in production.')}>
-            {i.connected ? 'Disconnect' : 'Connect'}
-          </button>
-        </div>
-      ))}
     </div>
   );
 }

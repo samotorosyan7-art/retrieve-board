@@ -35,10 +35,13 @@ export const fmtMoney = (v: number) =>
   '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function fmtBill(usdAmount: number, currency: Currency, fx: Record<Currency, number>) {
+  return fmtCurrency(usdAmount * (fx[currency] || 1), currency);
+}
+/** An amount already in `currency` (no conversion). */
+export function fmtCurrency(amount: number, currency: Currency) {
   const symbols = { USD: '$', EUR: '€', AMD: '֏' };
-  const converted = usdAmount * (fx[currency] || 1);
-  if (currency === 'AMD') return symbols.AMD + Math.round(converted).toLocaleString('en-US');
-  return symbols[currency] + converted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (currency === 'AMD') return symbols.AMD + Math.round(amount).toLocaleString('en-US');
+  return symbols[currency] + amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export const today = () => new Date().toISOString().split('T')[0];

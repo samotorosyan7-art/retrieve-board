@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useStore } from '@/components/store';
 import { PageHeader } from '@/components/ui';
 import { LOGO_SRC } from '@/lib/constants';
-import { fmtBill, homePath, today } from '@/lib/helpers';
+import { fmtCurrency, homePath, today } from '@/lib/helpers';
 import type { Currency } from '@/lib/types';
 import { CopyIcon, FileTextIcon, LockIcon, MailIcon, PencilIcon, PrinterIcon, Share2Icon, TriangleAlertIcon } from 'lucide-react';
 
@@ -17,7 +17,7 @@ const MONTHS = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'Jul
 type Entry = { key: string; pid: string; index: number; who: string; hours: number; desc: string; matter: string; empName: string; included: boolean };
 
 export default function BillingPage() {
-  const { currentUser, projects, emp, billingCurrency, setBillingCurrency, fx, firm, toast } = useStore();
+  const { currentUser, projects, emp, billingCurrency, setBillingCurrency, firm, toast } = useStore();
   const router = useRouter();
   const allowed = !!(currentUser?.isBilling || currentUser?.isAdmin);
   // Billing period as 'YYYY-MM', matched against each entry's date. Starts on the current month.
@@ -32,10 +32,15 @@ export default function BillingPage() {
     }
   }, [allowed, router, toast]);
 
-  // Every month that has billable time, plus the current one, newest first.
+  // Every month from January 2026 through the current one (or the latest billable entry, if later), plus any
+  // earlier month that has billable time — newest first.
   const periods = useMemo(() => {
-    const set = new Set([today().slice(0, 7)]);
+    const set = new Set<string>();
     projects.forEach(p => (p.timeLogs || []).forEach(l => { if (l.billable !== false && l.date) set.add(l.date.slice(0, 7)); }));
+    const last = [today().slice(0, 7), ...set].sort().at(-1)!;
+    for (let y = 2026, m = 1; `${y}-${String(m).padStart(2, '0')}` <= last; m === 12 ? (y++, m = 1) : m++) {
+      set.add(`${y}-${String(m).padStart(2, '0')}`);
+    }
     return [...set].sort().reverse();
   }, [projects]);
 
@@ -56,8 +61,9 @@ export default function BillingPage() {
   if (!allowed) return null;
 
   const active = clients.find(([name]) => name === selected) ?? clients[0];
-  const hoursOf = (entries: Entry[]) => entries.reduce((s, e) => s + (e.included ? e.hours : 0), 0);
-  const monthHours = clients.reduce((s, [, e]) => s + hoursOf(e), 0);
+  const round = (h: number) => Math.round(h * 100) / 100; // avoid 0.1 + 0.2 = 0.30000000000000004
+  const hoursOf = (entries: Entry[]) => round(entries.reduce((s, e) => s + (e.included ? e.hours : 0), 0));
+  const monthHours = round(clients.reduce((s, [, e]) => s + hoursOf(e), 0));
 
   return (
     <div className="page active" id="page-billing">
@@ -94,7 +100,7 @@ export default function BillingPage() {
             <div style={{ fontFamily: 'var(--font-sans)', fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text-primary)' }}>{monthHours}h logged</div>
             {active && (
               <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                {invoiceTotal > 0 ? `${active[0]}: ${fmtBill(invoiceTotal, billingCurrency, fx)} incl. ${firm.vatRate}% VAT` : 'Enter rates to calculate'}
+                {invoiceTotal > 0 ? `${active[0]}: ${fmtCurrency(invoiceTotal, billingCurrency)} incl. ${firm.vatRate}% VAT` : 'Enter rates to calculate'}
               </div>
             )}
           </div>
@@ -115,7 +121,21 @@ function Invoice({ client, entries, period, onTotal }: { client: string; entries
   const [rates, setRates] = useState<Record<string, string>>({});
   const invNum = useMemo(() => `INV-${period.slice(5, 7)}-${period.slice(0, 4)}-${Math.floor(Math.random() * 900 + 100)}`, [period]);
   const ref = useRef<HTMLDivElement>(null);
-  const fmt = (v: number) => (v > 0 ? fmtBill(v, billingCurrency, fx) : '—');
+  // Rates are typed in the selected currency, so amounts are in it too — no conversion when showing them.
+  const fmt = (v: number) => (v > 0 ? fmtCurrency(v, billingCurrency) : '—');
+  // Switching currency converts the rates already typed, so the invoice keeps its value.
+  const prevCurrency = useRef(billingCurrency);
+  useEffect(() => {
+    const from = prevCurrency.current;
+    prevCurrency.current = billingCurrency;
+    if (from === billingCurrency) return;
+    const factor = (fx[billingCurrency] || 1) / (fx[from] || 1);
+    const digits = billingCurrency === 'AMD' ? 0 : 2;
+    setRates(rs => Object.fromEntries(Object.entries(rs).map(([k, v]) => {
+      const n = parseFloat(v);
+      return [k, Number.isFinite(n) ? String(+(n * factor).toFixed(digits)) : v];
+    })));
+  }, [billingCurrency, fx]);
 
   const amounts = entries.map(e => (e.included ? e.hours * (parseFloat(rates[e.key]) || 0) : 0));
   const sub = amounts.reduce((s, a) => s + a, 0);
@@ -130,7 +150,7 @@ function Invoice({ client, entries, period, onTotal }: { client: string; entries
     const live = el.querySelectorAll<HTMLInputElement>('input.inv-rate-input');
     clone.querySelectorAll('input.inv-rate-input').forEach((inp, i) => {
       const span = document.createElement('span');
-      span.textContent = live[i]?.value ? fmtBill(parseFloat(live[i].value), billingCurrency, fx) : '—';
+      span.textContent = live[i]?.value ? fmtCurrency(parseFloat(live[i].value), billingCurrency) : '—';
       inp.replaceWith(span);
     });
     // Entries left off the invoice and the on/off column are for the screen only.
