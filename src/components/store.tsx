@@ -35,7 +35,8 @@ export type ModalState =
   | { kind: 'matter'; client?: string }
   | { kind: 'logTime' }
   | { kind: 'client'; id: string | null; onSaved?: (id: string) => void }
-  | { kind: 'member'; id: string | null };
+  | { kind: 'member'; id: string | null }
+  | { kind: 'supervisor'; pid: string };
 
 export type ConfirmState = { title: string; msg: string; confirmLabel?: string; onConfirm: () => void };
 
@@ -165,7 +166,7 @@ function useStoreValue() {
       setProjects(data.projects.map(p => {
         const old = prev.get(p.id);
         // Columns missing from the DB (before the migration) fall back to this browser's copy.
-        return old ? { matterType: old.matterType, isPrivate: old.isPrivate, createdBy: old.createdBy, ...p } : p;
+        return old ? { matterType: old.matterType, isPrivate: old.isPrivate, createdBy: old.createdBy, supervisor: old.supervisor, ...p } : p;
       }));
       setClients(data.clients);
       setActivity(data.activity);
@@ -257,7 +258,7 @@ function useStoreValue() {
       setProjects(ps => {
         const old = ps.find(x => x.id === id);
         const next = isDelete ? null : rowToProject(row);
-        return upsertOrDelete(ps, next && old ? { matterType: old.matterType, isPrivate: old.isPrivate, createdBy: old.createdBy, ...next } : next);
+        return upsertOrDelete(ps, next && old ? { matterType: old.matterType, isPrivate: old.isPrivate, createdBy: old.createdBy, supervisor: old.supervisor, ...next } : next);
       });
       if (isDelete) setSelectedPid(cur => (cur === id ? null : cur));
     } else if (table === 'clients') {
@@ -327,24 +328,17 @@ function useStoreValue() {
   };
   /** Emails a link to /reset-password where the user sets a new password. */
   const sendPasswordEmail = async (email: string) => {
-    // Sent by our server through Resend (Supabase's built-in mailer allows only a few emails an hour).
+    // Always sent by our server through Resend, never Supabase's built-in mailer (it allows only a few emails an hour).
     try {
       const res = await fetch('/api/auth/password-reset', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }),
       });
-      const json = await res.json().catch(() => ({}));
       if (res.ok) return null;
-      // 503 = server not configured (e.g. local dev without keys): fall back to Supabase's mailer below.
-      if (res.status !== 503) return typeof json.error === 'string' ? json.error : `Request failed (${res.status}).`;
+      const json = await res.json().catch(() => ({}));
+      return typeof json.error === 'string' ? json.error : `Request failed (${res.status}).`;
     } catch {
       return 'Could not reach the server. Check your connection and try again.';
     }
-    const sb = getSupabase();
-    if (!sb) return 'The app is not connected to the database.';
-    const { error } = await sb.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: `${location.origin}/reset-password`,
-    });
-    return error ? error.message : null;
   };
 
   /* ── Activity ── */
@@ -378,10 +372,25 @@ function useStoreValue() {
     if (patch.assignees) notifyAssigned(saved, id, patch.assignees.filter(a => !p.assignees.includes(a)));
     return next;
   };
+  /** Returns whether the status changed now. Supervisor Review first asks who reviews it (see sendToReview). */
   const setStatus = (id: string, status: StatusId) => {
+    if (status === 'review') { setModal({ kind: 'supervisor', pid: id }); return false; }
     const p = patchProject(id, { status });
-    if (!p) return;
+    if (!p) return false;
     addActivity(me(), `moved <b>${p.title}</b> to ${stat(status).label}`);
+    return true;
+  };
+  const memberName = (id: string) => state.current.team.find(e => e.id === id)?.name.split(' ')[0] || 'someone';
+  /** Move a task to Supervisor Review with the chosen supervisor; it then shows in their My Tasks. */
+  const sendToReview = (id: string, supervisor: string) => {
+    const p = patchProject(id, { status: 'review', supervisor });
+    if (!p) return;
+    addActivity(me(), `sent <b>${p.title}</b> to ${memberName(supervisor)} for supervisor review`);
+  };
+  const setSupervisor = (id: string, supervisor: string) => {
+    const p = patchProject(id, { supervisor: supervisor || undefined });
+    if (!p) return;
+    addActivity(me(), supervisor ? `made ${memberName(supervisor)} supervisor of <b>${p.title}</b>` : `removed the supervisor of <b>${p.title}</b>`);
   };
   const progressTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const setProgress = (id: string, progress: number) => {
@@ -448,7 +457,7 @@ function useStoreValue() {
       },
     });
   };
-  const createProject = (data: Pick<Project, 'title' | 'client' | 'area' | 'status' | 'priority' | 'assignees' | 'due' | 'notes' | 'isPrivate' | 'matterType'>) => {
+  const createProject = (data: Pick<Project, 'title' | 'client' | 'area' | 'status' | 'priority' | 'assignees' | 'due' | 'notes' | 'isPrivate' | 'matterType' | 'supervisor'>) => {
     const p: Project = {
       ...data, id: 'p' + Date.now(), progress: 0, created: today(), timeLogs: [], files: [], createdBy: me(),
     };
@@ -561,7 +570,7 @@ function useStoreValue() {
     toggleTheme: () => setIsDark(d => !d),
     toast, login, logout, sendPasswordEmail, emp, openPanel, closePanel: () => setSelectedPid(null),
     closeModal: () => setModal(null),
-    addActivity, saveProject, patchProject, setStatus, setProgress, togglePrivacy, addTimeLog, setAssignees, createProject, archiveProject, deleteProject,
+    addActivity, saveProject, patchProject, setStatus, sendToReview, setSupervisor, setProgress, togglePrivacy, addTimeLog, setAssignees, createProject, archiveProject, deleteProject,
     saveClient, deleteClient, saveMember, deleteMember,
     loadRoom, sendMessage, setActiveChatRoom, clearSavedState,
   };

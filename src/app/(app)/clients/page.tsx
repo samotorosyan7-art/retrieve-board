@@ -12,27 +12,21 @@ export default function ClientsPage() {
   const { clients, projects, setModal } = useStore();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const q = search.toLowerCase();
   const filtered = clients.filter(c => {
     if (q && !c.name.toLowerCase().includes(q) && !c.contact.toLowerCase().includes(q)) return false;
     if (typeFilter && c.type !== typeFilter) return false;
-    if (statusFilter !== 'all' && c.active !== (statusFilter === 'active')) return false;
     return true;
   });
   const sel = clients.find(c => c.id === selectedId) ?? filtered[0];
-  const nActive = clients.filter(c => c.active).length;
-  const statusTabs: [typeof statusFilter, string, number][] = [
-    ['all', 'All', clients.length], ['active', 'Active', nActive], ['inactive', 'Inactive', clients.length - nActive],
-  ];
   const types = [...new Set(clients.map(c => c.type))].sort();
   const addClient = () => setModal({ kind: 'client', id: null, onSaved: setSelectedId });
 
   return (
     <div className="page active" id="page-clients">
-      <PageHeader title="Clients" light="& Contacts" sub={`${clients.length} client${clients.length !== 1 ? 's' : ''} · ${nActive} active · ${clients.length - nActive} inactive`}>
+      <PageHeader title="Clients" light="& Contacts" sub={`${clients.length} client${clients.length !== 1 ? 's' : ''}`}>
         <button className="btn-solid" onClick={addClient}><PlusIcon size={14} /> Add Client</button>
       </PageHeader>
 
@@ -47,22 +41,13 @@ export default function ClientsPage() {
             <input placeholder="Search clients…" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <div className="clp-filter">
-            <div className="seg-ctrl" style={{ width: '100%' }}>
-              {statusTabs.map(([id, label, n]) => (
-                <button key={id} className={`seg-btn${statusFilter === id ? ' active' : ''}`} onClick={() => setStatusFilter(id)} style={{ flex: 1, fontSize: 11, padding: '4px 10px' }}>
-                  {label} <span style={{ opacity: 0.65 }}>({n})</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="clp-filter">
             {['', ...types].map(t => (
               <button key={t || 'all'} className={`seg-btn${typeFilter === t ? ' active' : ''}`} onClick={() => setTypeFilter(t)} style={{ fontSize: 11, padding: '4px 10px' }}>
                 {t || 'All'}
               </button>
             ))}
           </div>
-          <div style={{ maxHeight: 'calc(100vh - 320px)', overflowY: 'auto' }}>
+          <div style={{ maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
             {filtered.length === 0 ? (
               <div style={{ padding: 24, textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)' }}>No clients found</div>
             ) : filtered.map(c => {
@@ -74,9 +59,6 @@ export default function ClientsPage() {
                     <div className="cr-name">{c.name}</div>
                     <div className="cr-meta">{c.contact} · {n} task{n !== 1 ? 's' : ''}</div>
                   </div>
-                  <span className="cr-badge" style={{ background: c.active ? 'rgba(52,211,153,0.12)' : 'rgba(148,163,184,0.12)', color: c.active ? '#34D399' : '#94A3B8' }}>
-                    {c.active ? 'Active' : 'Inactive'}
-                  </span>
                 </div>
               );
             })}
@@ -140,9 +122,6 @@ function ClientDetail({ c, onDeleted }: { c: Client; onDeleted: () => void }) {
             <div className="cdc-name">{c.name}</div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
               <span className="cdc-type" style={{ background: `${col}22`, color: col }}>{c.type || 'Client'}</span>
-              <span className="cr-badge" style={{ background: c.active ? 'rgba(52,211,153,0.12)' : 'rgba(148,163,184,0.12)', color: c.active ? '#34D399' : '#94A3B8' }}>
-                {c.active ? 'Active' : 'Inactive'}
-              </span>
             </div>
           </div>
           <div className="cdc-actions">

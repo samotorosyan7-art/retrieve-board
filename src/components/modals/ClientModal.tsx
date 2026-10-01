@@ -9,7 +9,7 @@ import { ModalFooter, ModalHeader } from './ModalHost';
 import { CircleCheckIcon, TriangleAlertIcon } from 'lucide-react';
 
 const EMPTY: Omit<Client, 'id'> = {
-  name: '', type: 'Corporate', contact: '', email: '', phone: '', address: '', taxId: '', notes: '', since: '', active: true,
+  name: '', type: 'Corporate', contact: '', email: '', phone: '', address: '', taxId: '', notes: '', since: '',
 };
 
 export function ClientModal({ id, onSaved }: { id: string | null; onSaved?: (id: string) => void }) {
@@ -17,7 +17,7 @@ export function ClientModal({ id, onSaved }: { id: string | null; onSaved?: (id:
   const existing = id ? clients.find(c => c.id === id) : undefined;
   const [c, setC] = useState<Omit<Client, 'id'>>(existing ?? { ...EMPTY, since: today() });
   const set = (k: keyof Client) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-    setC(prev => ({ ...prev, [k]: k === 'active' ? e.target.value === 'true' : e.target.value }));
+    setC(prev => ({ ...prev, [k]: e.target.value }));
 
   function submit() {
     const name = c.name.trim(), contact = c.contact.trim();
@@ -37,7 +37,7 @@ export function ClientModal({ id, onSaved }: { id: string | null; onSaved?: (id:
     <>
       <ModalHeader
         title={existing ? 'Edit Client' : 'Add New Client'}
-        sub={existing ? 'Update contact details and status' : 'Add a new client to your roster'}
+        sub={existing ? 'Update contact details' : 'Add a new client to your roster'}
       />
       <div className="modal-body">
         <div className="form-grid">
@@ -45,17 +45,10 @@ export function ClientModal({ id, onSaved }: { id: string | null; onSaved?: (id:
             <label className="form-label">Client / Company Name *</label>
             <input className="input" value={c.name} onChange={set('name')} placeholder="e.g. Shell Armenia" autoFocus />
           </div>
-          <div>
+          <div style={{ gridColumn: '1/-1' }}>
             <label className="form-label">Type</label>
             <select className="input sel" value={c.type} onChange={set('type')}>
               {CLIENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="form-label">Status</label>
-            <select className="input sel" value={String(c.active)} onChange={set('active')}>
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
             </select>
           </div>
         </div>

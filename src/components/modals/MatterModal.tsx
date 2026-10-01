@@ -8,8 +8,10 @@ import { Photo } from '../ui';
 import { ModalFooter, ModalHeader } from './ModalHost';
 import { CircleCheckIcon, GlobeIcon, LockIcon, TriangleAlertIcon } from 'lucide-react';
 
+const WORKLOAD_STATUSES = STATUSES.filter(s => s.id === 'intake' || s.id === 'inprogress' || s.id === 'review');
+
 export function MatterModal({ client: initialClient = '' }: { client?: string }) {
-  const { team, clients, createProject, toast, closeModal } = useStore();
+  const { team, clients, projects, createProject, toast, closeModal } = useStore();
   const [title, setTitle] = useState('');
   const [client, setClient] = useState(initialClient);
   const [area, setArea] = useState(AREAS[0]);
@@ -20,13 +22,20 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
   const [assignees, setAssignees] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
+  const [supervisor, setSupervisor] = useState('');
 
   // One assignee per task: picking someone replaces the previous pick; clicking them again clears it.
-  const toggleAssign = (id: string) => setAssignees(a => (a.includes(id) ? [] : [id]));
+  const toggleAssign = (id: string) => {
+    setAssignees(a => (a.includes(id) ? [] : [id]));
+    if (id === supervisor) setSupervisor('');
+  };
+  // What the chosen assignee already has on their plate.
+  const workload = WORKLOAD_STATUSES.map(s => ({ ...s, n: projects.filter(p => p.status === s.id && p.assignees.includes(assignees[0])).length }));
 
   function submit() {
     if (!title.trim() || !client.trim()) { toast(TriangleAlertIcon, 'Missing info', 'Title and client are required.'); return; }
-    const p = createProject({ title: title.trim(), client: client.trim(), area, matterType, status, priority, assignees, due, notes, isPrivate });
+    if (status === 'review' && !supervisor) { toast(TriangleAlertIcon, 'Missing info', 'Choose a supervisor for a task in Supervisor Review.'); return; }
+    const p = createProject({ title: title.trim(), client: client.trim(), area, matterType, status, priority, assignees, due, notes, isPrivate, supervisor: supervisor || undefined });
     closeModal();
     toast(CircleCheckIcon, 'Task created', `"${p.title}" added to the board.`);
   }
@@ -82,6 +91,21 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
               </div>
             ))}
           </div>
+          {assignees[0] && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 11.5, color: 'var(--text-secondary)' }}>
+              <span>{team.find(e => e.id === assignees[0])?.name.split(' ')[0]} currently has:</span>
+              {workload.map(s => (
+                <span key={s.id} style={{ background: s.bg, color: s.col, padding: '2px 8px', borderRadius: 999, fontWeight: 600 }}>{s.n} {s.label}</span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div>
+          <label className="form-label">Supervisor{status === 'review' ? ' *' : ''}</label>
+          <select className="input sel" value={supervisor} onChange={e => setSupervisor(e.target.value)}>
+            <option value="">— Not set —</option>
+            {team.filter(e => !assignees.includes(e.id)).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
         </div>
         <div>
           <label className="form-label">Notes</label>

@@ -6,7 +6,7 @@ import { canDeleteMatter, fmtDate, isOD, pri, progColor, stat, today } from '@/l
 import type { Project } from '@/lib/types';
 import { useStore } from './store';
 import { Photo, Tag } from './ui';
-import { ArchiveIcon, CalendarIcon, CheckIcon, CircleCheckIcon, CopyIcon, FileTextIcon, FlagIcon, GlobeIcon, LinkIcon, LockIcon, PaperclipIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserPlusIcon, XIcon } from 'lucide-react';
+import { ArchiveIcon, CalendarIcon, CheckIcon, CircleCheckIcon, CopyIcon, FileTextIcon, FlagIcon, GlobeIcon, LinkIcon, LockIcon, PaperclipIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserCheckIcon, UserPlusIcon, XIcon } from 'lucide-react';
 
 export function DetailPanel() {
   const { projects, selectedPid } = useStore();
@@ -21,7 +21,7 @@ export function DetailPanel() {
 function PanelContent({ p }: { p: Project }) {
   const {
     currentUser, team, emp, closePanel, togglePrivacy, setProgress, setStatus, patchProject,
-    addTimeLog, setAssignees, addActivity, archiveProject, deleteProject, toast,
+    addTimeLog, setAssignees, setSupervisor, addActivity, archiveProject, deleteProject, toast,
   } = useStore();
   const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
   const isOwner = !p.createdBy || p.createdBy === currentUser?.id;
@@ -107,7 +107,7 @@ function PanelContent({ p }: { p: Project }) {
                 key={s.id}
                 className="stat-btn"
                 style={{ background: p.status === s.id ? s.col : s.bg, color: p.status === s.id ? '#fff' : s.col, borderColor: `${s.col}44` }}
-                onClick={() => { setStatus(p.id, s.id); toast(CircleCheckIcon, 'Status updated', `Moved to "${s.label}"`); }}
+                onClick={() => { if (setStatus(p.id, s.id)) toast(CircleCheckIcon, 'Status updated', `Moved to "${s.label}"`); }}
               >
                 {s.label}
               </button>
@@ -130,6 +130,18 @@ function PanelContent({ p }: { p: Project }) {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* SUPERVISOR */}
+        <div className="dp-section">
+          <div className="dp-section-label">Supervisor</div>
+          <select
+            className="input sel" value={p.supervisor || ''}
+            onChange={e => { setSupervisor(p.id, e.target.value); toast(UserCheckIcon, 'Supervisor updated', emp(e.target.value)?.name || 'None'); }}
+          >
+            <option value="">— Not set —</option>
+            {team.filter(e => !p.assignees.includes(e.id) || e.id === p.supervisor).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
         </div>
 
         {/* MATTER TYPE */}

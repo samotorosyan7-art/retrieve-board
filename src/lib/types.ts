@@ -46,6 +46,8 @@ export interface Project {
   matterType?: string;
   isPrivate?: boolean;
   createdBy?: string;
+  /** Member who reviews the task in "Supervisor Review" (migration 007). */
+  supervisor?: string;
 }
 
 export interface Client {
@@ -59,7 +61,6 @@ export interface Client {
   taxId: string;
   notes: string;
   since: string;
-  active: boolean;
 }
 
 export interface Activity {

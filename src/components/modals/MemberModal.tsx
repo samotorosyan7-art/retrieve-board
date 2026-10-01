@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { Member } from '@/lib/types';
 import { sendMemberInvite } from '@/lib/email';
+import { makeInitials } from '@/lib/helpers';
 import { useStore } from '../store';
 import { ModalFooter, ModalHeader } from './ModalHost';
 import { CircleCheckIcon, MailIcon, TriangleAlertIcon } from 'lucide-react';
@@ -14,6 +15,11 @@ export function MemberModal({ id }: { id: string | null }) {
   const e = id ? team.find(x => x.id === id) : undefined;
   const [name, setName] = useState(e?.name || '');
   const [init, setInit] = useState(e?.init || '');
+  // Initials follow the name until someone types their own.
+  const [initEdited, setInitEdited] = useState(!!e?.init);
+  const takenInits = team.filter(x => x.id !== e?.id).map(x => x.init.toUpperCase()).filter(Boolean);
+  const initClash = !!init.trim() && takenInits.includes(init.trim().toUpperCase());
+  const changeName = (v: string) => { setName(v); if (!initEdited) setInit(makeInitials(v, takenInits)); };
   const [role, setRole] = useState(e?.role || '');
   const [email, setEmail] = useState(e?.email || '');
   const [rate, setRate] = useState(String(e?.rate || 0));
@@ -28,11 +34,12 @@ export function MemberModal({ id }: { id: string | null }) {
   async function submit() {
     const n = name.trim(), r = role.trim(), em = email.trim().toLowerCase();
     if (!n || !r || !em) { toast(TriangleAlertIcon, 'Required', 'Name, role and email are required.'); return; }
+    if (initClash) { toast(TriangleAlertIcon, 'Initials in use', `${init.trim().toUpperCase()} already belongs to another member.`); return; }
     if (team.some(x => x.email.toLowerCase() === em && x.id !== e?.id)) { toast(TriangleAlertIcon, 'Email in use', `${em} already belongs to another member.`); return; }
     const member: Member = {
       id: e?.id ?? 'u' + Date.now(),
       name: n, role: r, email: em,
-      init: init.trim() || n.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2),
+      init: init.trim().toUpperCase() || makeInitials(n, takenInits),
       rate: parseInt(rate || '0') || 0,
       color, img: img.trim(),
       isAdmin: access === 'admin',
@@ -71,8 +78,16 @@ export function MemberModal({ id }: { id: string | null }) {
       />
       <div className="modal-body">
         <div className="form-grid">
-          <div><label className="form-label">Full Name *</label><input className="input" value={name} onChange={x => setName(x.target.value)} placeholder="e.g. Mariam Dovlatyan" /></div>
-          <div><label className="form-label">Initials</label><input className="input" value={init} onChange={x => setInit(x.target.value)} placeholder="e.g. SS" maxLength={3} /></div>
+          <div><label className="form-label">Full Name *</label><input className="input" value={name} onChange={x => changeName(x.target.value)} placeholder="e.g. Mariam Dovlatyan" /></div>
+          <div>
+            <label className="form-label">Initials</label>
+            <input
+              className="input" value={init} placeholder="e.g. MD" maxLength={2}
+              onChange={x => { setInit(x.target.value.toUpperCase()); setInitEdited(!!x.target.value); }}
+              style={initClash ? { borderColor: 'var(--p-high)' } : undefined}
+            />
+            {initClash && <div style={{ fontSize: 11, color: 'var(--p-high)', marginTop: 4 }}>Already used by {team.find(x => x.id !== e?.id && x.init.toUpperCase() === init.trim().toUpperCase())?.name}</div>}
+          </div>
         </div>
         <div className="form-grid">
           <div><label className="form-label">Role / Title *</label><input className="input" value={role} onChange={x => setRole(x.target.value)} placeholder="e.g. Associate Attorney" /></div>

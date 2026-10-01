@@ -6,10 +6,10 @@ import { AvStack, PageHeader, Tag } from '@/components/ui';
 import { STATUSES } from '@/lib/constants';
 import { firstWords, fmtShort, isOD, pri, progColor, stat } from '@/lib/helpers';
 import type { StatusId } from '@/lib/types';
-import { GlobeIcon, LockIcon, MoveIcon, PlusIcon, TriangleAlertIcon } from 'lucide-react';
+import { GlobeIcon, LockIcon, MoveIcon, TriangleAlertIcon } from 'lucide-react';
 
 export default function KanbanPage() {
-  const { currentUser, selectedPid, setModal, openPanel, setStatus, togglePrivacy, toast } = useStore();
+  const { currentUser, selectedPid, openPanel, setStatus, togglePrivacy, toast } = useStore();
   const filters = useMatterFilters();
   const f = filters.list;
 
@@ -106,8 +106,7 @@ export default function KanbanPage() {
         const ns = drop.dataset.status as StatusId;
         const p = f.find(x => x.id === pid);
         if (p && ns && p.status !== ns) {
-          setStatus(pid, ns);
-          toast(MoveIcon, 'Moved', `"${p.title}" → ${stat(ns).label}`);
+          if (setStatus(pid, ns)) toast(MoveIcon, 'Moved', `"${p.title}" → ${stat(ns).label}`);
         }
       } else if (!wasDrag) {
         openPanel(pid);
@@ -121,9 +120,7 @@ export default function KanbanPage() {
 
   return (
     <div className="page active" id="page-kanban">
-      <PageHeader title="Kanban" light="Board" sub={`${f.length} task${f.length !== 1 ? 's' : ''} shown · drag a card to another column to move it`}>
-        <button className="btn-solid" onClick={() => setModal({ kind: 'matter' })}><PlusIcon size={14} /> New Task</button>
-      </PageHeader>
+      <PageHeader title="Kanban" light="Board" sub={`${f.length} task${f.length !== 1 ? 's' : ''} shown · drag a card to another column to move it`} />
       <MatterFilterRow {...filters} />
 
       <div className="kanban" onMouseDown={onBoardMouseDown}>

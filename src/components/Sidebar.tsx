@@ -20,7 +20,8 @@ export function Sidebar() {
 
   const isAdmin = !!currentUser.isAdmin;
   const isBilling = !!(currentUser.isBilling || currentUser.isAdmin);
-  const pendingTasks = projects.filter(p => isOpen(p) && p.assignees.includes(currentUser.id)).length;
+  // Open tasks assigned to me, plus tasks waiting for my review as supervisor.
+  const pendingTasks = projects.filter(p => (isOpen(p) && p.assignees.includes(currentUser.id)) || (p.status === 'review' && p.supervisor === currentUser.id)).length;
   const myTasks = { id: 'tasks', icon: ListChecksIcon, label: 'My Tasks', badge: pendingTasks };
 
   const link = (n: NavItem) => (

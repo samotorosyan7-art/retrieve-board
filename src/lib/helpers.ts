@@ -66,7 +66,7 @@ export const clientInitials = (name: string) =>
 export function canSeeMatter(p: Project, user: Member | null) {
   if (!p.isPrivate) return true;
   if (!user) return false;
-  return p.createdBy === user.id || user.isAdmin;
+  return p.createdBy === user.id || p.supervisor === user.id || user.isAdmin;
 }
 
 /** Admins delete any task; members only tasks they created (matches migration 004). */
@@ -75,3 +75,17 @@ export const canDeleteMatter = (p: Project, user: Member | null) =>
 
 /** Direct-message room shared by two members: 'dm_<a>__<b>' with ids sorted (must match migration 002). */
 export const dmRoom = (a: string, b: string) => 'dm_' + [a, b].sort().join('__');
+
+/** Two-letter initials from a full name ("Mariam Dovlatyan" → "MD"), avoiding any in `taken`.
+ *  On a clash it tries close alternatives: first initial + another letter of the last name (MO, MV…),
+ *  then of the first name (MA, MR…), then the first initial with any letter. */
+export function makeInitials(name: string, taken: string[]) {
+  const words = name.toUpperCase().split(/\s+/).map(w => w.replace(/[^\p{L}]/gu, '')).filter(Boolean);
+  if (!words.length) return '';
+  const first = words[0], last = words.length > 1 ? words[words.length - 1] : '';
+  const used = new Set(taken.map(t => t.toUpperCase()));
+  const a = first[0];
+  const seconds = [...last, ...first.slice(1), ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
+  for (const b of seconds) if (!used.has(a + b)) return a + b;
+  return a + (last[0] || first[1] || '');
+}

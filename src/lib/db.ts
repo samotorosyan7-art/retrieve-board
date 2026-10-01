@@ -5,9 +5,9 @@ import type { Activity, ChatMessage, Client, FirmSettings, Member, Project } fro
 /* ── Row converters (DB snake_case ↔ app camelCase) ── */
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-/* Optional columns — added by supabase/migrations/001_matter_fields.sql. Until that migration runs we
+/* Optional columns — added by supabase/migrations/001_matter_fields.sql (supervisor: 007). Until that migration runs we
    detect their absence on load and simply don't send them (the values stay in the local cache). */
-const OPTIONAL_PROJECT_COLS = ['matter_type', 'is_private', 'created_by'] as const;
+const OPTIONAL_PROJECT_COLS = ['matter_type', 'is_private', 'created_by', 'supervisor'] as const;
 const projectCols = new Set<string>();
 
 export function projectToRow(p: Project) {
@@ -15,6 +15,7 @@ export function projectToRow(p: Project) {
   if (projectCols.has('matter_type')) optional.matter_type = p.matterType || null;
   if (projectCols.has('is_private')) optional.is_private = !!p.isPrivate;
   if (projectCols.has('created_by')) optional.created_by = p.createdBy || null;
+  if (projectCols.has('supervisor')) optional.supervisor = p.supervisor || null;
   return {
     ...optional,
     id: p.id, title: p.title, client: p.client, area: p.area,
@@ -35,6 +36,7 @@ export function rowToProject(r: Row): Project {
     ...('matter_type' in r ? { matterType: r.matter_type || '' } : {}),
     ...('is_private' in r ? { isPrivate: !!r.is_private } : {}),
     ...('created_by' in r ? { createdBy: r.created_by || undefined } : {}),
+    ...('supervisor' in r ? { supervisor: r.supervisor || undefined } : {}),
   };
 }
 export function clientToRow(c: Client) {
@@ -42,7 +44,7 @@ export function clientToRow(c: Client) {
     id: c.id, name: c.name, type: c.type, contact: c.contact,
     email: c.email || '', phone: c.phone || '', address: c.address || '',
     tax_id: c.taxId || '', notes: c.notes || '',
-    since: c.since || null, active: c.active !== false,
+    since: c.since || null,
   };
 }
 export function rowToClient(r: Row): Client {
@@ -50,7 +52,7 @@ export function rowToClient(r: Row): Client {
     id: r.id, name: r.name, type: r.type, contact: r.contact,
     email: r.email || '', phone: r.phone || '', address: r.address || '',
     taxId: r.tax_id || '', notes: r.notes || '',
-    since: r.since || '', active: r.active !== false,
+    since: r.since || '',
   };
 }
 export function rowToActivity(r: Row): Activity {
