@@ -19,7 +19,6 @@ export function Sidebar() {
   if (!currentUser) return null;
 
   const isAdmin = !!currentUser.isAdmin;
-  const isBilling = !!(currentUser.isBilling || currentUser.isAdmin);
   // Open tasks assigned to me or supervised by me (matches My Tasks).
   const pendingTasks = projects.filter(p => isOpen(p) && (p.assignees.includes(currentUser.id) || p.supervisor === currentUser.id)).length;
   const myTasks = { id: 'tasks', icon: ListChecksIcon, label: 'My Tasks', badge: pendingTasks };
@@ -56,7 +55,7 @@ export function Sidebar() {
         {link({ id: 'team', icon: UsersIcon, label: 'Team Workload' })}
         {isAdmin && link({ id: 'logs', icon: TimerIcon, label: 'Logs' })}
         {link({ id: 'chat', icon: MessagesSquareIcon, label: 'Team Chat', badge: chatUnread })}
-        {isBilling && (
+        {isAdmin && (
           <>
             <div className="nav-divider" />
             <div className="sb-section">Finance</div>

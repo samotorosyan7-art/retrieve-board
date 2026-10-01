@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
-import { fmtDue } from './helpers';
+import { fmtCurrency, fmtDue } from './helpers';
 import { PRIORITIES } from './constants';
+import type { Currency, FirmSettings } from './types';
 
 /* Shared by the /api notify + cron routes. Server-only: RESEND_API_KEY must never reach the browser.
    RESEND_FROM must use a domain verified in Resend; onboarding@resend.dev only delivers to the Resend account owner. */
@@ -162,3 +163,68 @@ export async function sendLoginEmail(opts: { to: { name: string; email: string }
   if (error) console.error('Resend failed', error);
   return !error;
 }
+
+export type InvoiceLine = { desc: string; matter: string; attorney: string; hours: number; rate: number };
+
+/** Email an invoice to a client. Amounts are computed here from hours × rate. Returns an error message, or null when sent. */
+export async function sendInvoiceEmail(opts: {
+  to: string; client: string; invNum: string; period: string; currency: Currency;
+  lines: InvoiceLine[]; includeVat: boolean; firm: FirmSettings; appUrl: string; replyTo?: string;
+}) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return 'Email is not set up on the server (RESEND_API_KEY).';
+  const { to, client, invNum, period, currency, lines, includeVat, firm, appUrl, replyTo } = opts;
+  const money = (v: number) => fmtCurrency(v, currency);
+  const amount = (l: InvoiceLine) => l.hours * l.rate;
+  const sub = lines.reduce((s, l) => s + amount(l), 0);
+  const vat = includeVat ? sub * (firm.vatRate / 100) : 0;
+  const total = sub + vat;
+
+  const th = (label: string, right = false) =>
+    `<th align="${right ? 'right' : 'left'}" style="padding:8px 10px;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${C.muted};border-bottom:1px solid ${C.line}">${label}</th>`;
+  const td = (v: string, right = false) =>
+    `<td align="${right ? 'right' : 'left'}" valign="top" style="padding:9px 10px;font-size:13px;color:${C.text};border-bottom:1px solid ${C.line}">${v}</td>`;
+  const totRow = (label: string, v: string, strong = false) => `
+    <tr><td style="padding:6px 0;font-size:${strong ? 15 : 13}px;font-weight:${strong ? 700 : 400};color:${strong ? C.navy : '#33445E'}">${label}</td>
+    <td align="right" style="padding:6px 0;font-size:${strong ? 15 : 13}px;font-weight:700;color:${C.navy}">${v}</td></tr>`;
+
+  const content = `
+    ${h1(`Invoice ${esc(invNum)}`)}
+    ${para(`Dear ${esc(client)},<br>please find below our invoice for legal services in <strong>${esc(period)}</strong>.`)}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 18px;border:1px solid ${C.line};border-radius:10px">
+      <tr>${th('Description')}${th('Attorney')}${th('Hours', true)}${th('Rate', true)}${th('Amount', true)}</tr>
+      ${lines.map(l => `<tr>
+        ${td(`<strong>${esc(l.desc)}</strong><div style="font-size:11px;color:${C.muted}">${esc(l.matter)}</div>`)}
+        ${td(esc(l.attorney))}${td(`${l.hours}h`, true)}${td(money(l.rate), true)}${td(money(amount(l)), true)}
+      </tr>`).join('')}
+    </table>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right" style="width:280px;margin-bottom:18px">
+      ${totRow('Subtotal', money(sub))}
+      ${includeVat ? totRow(`RA VAT (${firm.vatRate}%)`, money(vat)) : ''}
+      ${totRow(`Total due (${currency})${includeVat ? '' : ' · excl. VAT'}`, money(total), true)}
+    </table>
+    <div style="clear:both"></div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;border-radius:10px;background:${C.panel};border:1px solid ${C.line}">
+      <tr><td style="padding:16px 18px;font-size:13px;line-height:1.7;color:#33445E">
+        <strong style="color:${C.navy}">Payment terms:</strong> ${esc(firm.paymentTerms)}
+        ${firm.bank ? `<br><strong style="color:${C.navy}">Bank transfer:</strong> ${esc(firm.bank)}` : ''}
+        ${firm.tin ? `<br><strong style="color:${C.navy}">TIN:</strong> ${esc(firm.tin)}` : ''}
+        ${firm.billingEmail ? `<br><strong style="color:${C.navy}">Questions:</strong> ${esc(firm.billingEmail)}` : ''}
+      </td></tr>
+    </table>`;
+  const html = layout({
+    appUrl, preheader: `Invoice ${invNum} · ${period} · ${money(total)}`, eyebrow: 'Invoice', content,
+    footerNote: `${esc(firm.name)} · ${esc(firm.address)}`,
+  });
+  const text = `Invoice ${invNum} — ${period}\n\nDear ${client},\n\n`
+    + lines.map(l => `${l.desc} (${l.matter}) — ${l.attorney}: ${l.hours}h × ${money(l.rate)} = ${money(amount(l))}`).join('\n')
+    + `\n\nSubtotal: ${money(sub)}${includeVat ? `\nRA VAT (${firm.vatRate}%): ${money(vat)}` : ''}\nTotal due (${currency})${includeVat ? '' : ' excl. VAT'}: ${money(total)}`
+    + `\n\nPayment terms: ${firm.paymentTerms}${firm.bank ? `\nBank transfer: ${firm.bank}` : ''}${firm.billingEmail ? `\nQuestions: ${firm.billingEmail}` : ''}\n\n${firm.name}`;
+
+  const { error } = await new Resend(key).emails.send({
+    from: FROM, to, replyTo, subject: `Invoice ${invNum} — ${firm.name} · ${period}`, html, text,
+  });
+  if (error) { console.error('Resend failed', error); return error.message || 'The email service rejected the message.'; }
+  return null;
+}
+

@@ -638,7 +638,7 @@ function useStoreValue() {
   // Rooms listed on the chat page: channels this member may see, plus a DM with each teammate.
   // The sidebar total only counts these, so it always matches the badges on the chat page.
   const chatRoomIds = currentUser ? [
-    ...CHAT_ROOMS.filter(r => !r.billingOnly || currentUser.isBilling || currentUser.isAdmin).map(r => r.id),
+    ...CHAT_ROOMS.filter(r => !r.billingOnly || currentUser.isAdmin).map(r => r.id),
     ...team.filter(e => e.id !== currentUser.id).map(e => dmRoom(currentUser.id, e.id)),
   ] : [];
   const chatUnread = chatRoomIds.reduce((n, id) => n + (chatUnreadByRoom[id] || 0), 0);

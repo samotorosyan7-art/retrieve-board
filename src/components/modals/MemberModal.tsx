@@ -8,7 +8,7 @@ import { useStore } from '../store';
 import { ModalFooter, ModalHeader } from './ModalHost';
 import { CircleCheckIcon, MailIcon, TriangleAlertIcon } from 'lucide-react';
 
-type Access = 'member' | 'assistant' | 'billing' | 'admin';
+type Access = 'member' | 'admin';
 
 export function MemberModal({ id }: { id: string | null }) {
   const { team, saveMember, toast, closeModal } = useStore();
@@ -26,7 +26,7 @@ export function MemberModal({ id }: { id: string | null }) {
   const [color, setColor] = useState(e?.color || '#7C6FF7');
   const [img, setImg] = useState(e?.img || '');
   const [access, setAccess] = useState<Access>(
-    e?.isAdmin ? 'admin' : e?.isAdmin_assistant ? 'assistant' : e?.isBilling ? 'billing' : 'member',
+    e?.isAdmin ? 'admin' : 'member',
   );
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
@@ -43,8 +43,6 @@ export function MemberModal({ id }: { id: string | null }) {
       rate: parseInt(rate || '0') || 0,
       color, img: img.trim(),
       isAdmin: access === 'admin',
-      isBilling: access === 'billing' || access === 'admin',
-      isAdmin_assistant: access === 'assistant',
     };
     setBusy(true);
     const ok = await saveMember(member);
@@ -109,8 +107,6 @@ export function MemberModal({ id }: { id: string | null }) {
             <label className="form-label">Access Level</label>
             <select className="input sel" value={access} onChange={x => setAccess(x.target.value as Access)}>
               <option value="member">Member (standard)</option>
-              <option value="assistant">Admin Assistant</option>
-              <option value="billing">Billing access</option>
               <option value="admin">Full Admin</option>
             </select>
           </div>

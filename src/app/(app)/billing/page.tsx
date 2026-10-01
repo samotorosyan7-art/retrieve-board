@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useStore } from '@/components/store';
 import { PageHeader } from '@/components/ui';
 import { LOGO_SRC } from '@/lib/constants';
+import { sendInvoice } from '@/lib/email';
 import { fmtCurrency, homePath, today } from '@/lib/helpers';
 import type { Currency } from '@/lib/types';
-import { CopyIcon, FileTextIcon, LockIcon, MailIcon, PencilIcon, PrinterIcon, Share2Icon, TriangleAlertIcon } from 'lucide-react';
+import { CircleCheckIcon, CopyIcon, FileTextIcon, LockIcon, MailIcon, PencilIcon, PrinterIcon, Share2Icon, TriangleAlertIcon, XIcon } from 'lucide-react';
 
 /** 'YYYY-MM' → 'October 2026'. */
 const periodLabel = (period: string) => `${MONTHS[+period.slice(5, 7)]} ${period.slice(0, 4)}`;
@@ -19,15 +20,17 @@ type Entry = { key: string; pid: string; index: number; who: string; hours: numb
 export default function BillingPage() {
   const { currentUser, projects, emp, billingCurrency, setBillingCurrency, firm, toast } = useStore();
   const router = useRouter();
-  const allowed = !!(currentUser?.isBilling || currentUser?.isAdmin);
+  const allowed = !!currentUser?.isAdmin;
   // Billing period as 'YYYY-MM', matched against each entry's date. Starts on the current month.
   const [period, setPeriod] = useState(() => today().slice(0, 7));
   const [selected, setSelected] = useState<string | null>(null);
   const [invoiceTotal, setInvoiceTotal] = useState(0);
+  // Whether VAT is added to invoice totals (applies to every client's invoice, PDF and email).
+  const [includeVat, setIncludeVat] = useState(true);
 
   useEffect(() => {
     if (!allowed) {
-      toast(LockIcon, 'Access denied', 'Billing is restricted to Managing Partner and Senior Partner.');
+      toast(LockIcon, 'Access denied', 'Billing & Invoices is for admins only.');
       router.replace(homePath(currentUser));
     }
   }, [allowed, router, toast]);
@@ -75,6 +78,10 @@ export default function BillingPage() {
             </button>
           ))}
         </div>
+        <div className="seg-ctrl" title="Add VAT to invoice totals">
+          <button className={`seg-btn${includeVat ? ' active' : ''}`} onClick={() => setIncludeVat(true)}>Incl. VAT</button>
+          <button className={`seg-btn${!includeVat ? ' active' : ''}`} onClick={() => setIncludeVat(false)}>Excl. VAT</button>
+        </div>
         <select className="sel" value={period} onChange={e => { setPeriod(e.target.value); setSelected(null); }}>
           {periods.map(m => <option key={m} value={m}>{periodLabel(m)}</option>)}
         </select>
@@ -100,14 +107,14 @@ export default function BillingPage() {
             <div style={{ fontFamily: 'var(--font-sans)', fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text-primary)' }}>{monthHours}h logged</div>
             {active && (
               <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                {invoiceTotal > 0 ? `${active[0]}: ${fmtCurrency(invoiceTotal, billingCurrency)} incl. ${firm.vatRate}% VAT` : 'Enter rates to calculate'}
+                {invoiceTotal > 0 ? `${active[0]}: ${fmtCurrency(invoiceTotal, billingCurrency)} ${includeVat ? `incl. ${firm.vatRate}% VAT` : 'excl. VAT'}` : 'Enter rates to calculate'}
               </div>
             )}
           </div>
         </div>
         <div className="billing-main-panel">
           {active
-            ? <Invoice key={`${active[0]}-${period}`} client={active[0]} entries={active[1]} period={period} onTotal={setInvoiceTotal} />
+            ? <Invoice key={`${active[0]}-${period}`} client={active[0]} entries={active[1]} period={period} includeVat={includeVat} onTotal={setInvoiceTotal} />
             : <div style={{ color: 'var(--text-tertiary)', padding: 20 }}>Select a client.</div>}
         </div>
       </div>
@@ -115,8 +122,9 @@ export default function BillingPage() {
   );
 }
 
-function Invoice({ client, entries, period, onTotal }: { client: string; entries: Entry[]; period: string; onTotal: (v: number) => void }) {
-  const { currentUser, setLogInInvoice, billingCurrency, firm, toast } = useStore();
+function Invoice({ client, entries, period, includeVat, onTotal }: { client: string; entries: Entry[]; period: string; includeVat: boolean; onTotal: (v: number) => void }) {
+  const { currentUser, setLogInInvoice, billingCurrency, firm, clients, toast } = useStore();
+  const [sending, setSending] = useState(false);
   const isAdmin = !!currentUser?.isAdmin;
   const [rates, setRates] = useState<Record<string, string>>({});
   const invNum = useMemo(() => `INV-${period.slice(5, 7)}-${period.slice(0, 4)}-${Math.floor(Math.random() * 900 + 100)}`, [period]);
@@ -126,7 +134,7 @@ function Invoice({ client, entries, period, onTotal }: { client: string; entries
 
   const amounts = entries.map(e => (e.included ? e.hours * (parseFloat(rates[e.key]) || 0) : 0));
   const sub = amounts.reduce((s, a) => s + a, 0);
-  const tax = sub * (firm.vatRate / 100), total = sub + tax;
+  const tax = includeVat ? sub * (firm.vatRate / 100) : 0, total = sub + tax;
 
   useEffect(() => { onTotal(total); }, [total, onTotal]);
 
@@ -218,17 +226,111 @@ function Invoice({ client, entries, period, onTotal }: { client: string; entries
       <div className="inv-totals">
         <div className="inv-totals-block">
           <div className="inv-tot-row"><span className="inv-tot-label">Subtotal</span><span className="inv-tot-val">{fmt(sub)}</span></div>
-          <div className="inv-tot-row"><span className="inv-tot-label">RA VAT ({firm.vatRate}%)</span><span className="inv-tot-val">{fmt(tax)}</span></div>
-          <div className="inv-tot-row final"><span className="inv-tot-label">Total Due ({billingCurrency})</span><span className="inv-tot-val">{fmt(total)}</span></div>
+          {includeVat && <div className="inv-tot-row"><span className="inv-tot-label">RA VAT ({firm.vatRate}%)</span><span className="inv-tot-val">{fmt(tax)}</span></div>}
+          <div className="inv-tot-row final"><span className="inv-tot-label">Total Due ({billingCurrency}){!includeVat && ' · excl. VAT'}</span><span className="inv-tot-val">{fmt(total)}</span></div>
         </div>
       </div>
       <div className="inv-actions">
-        <button className="btn-solid" onClick={() => toast(MailIcon, 'Invoice sent', `Billing report emailed to ${client}.`)}><MailIcon size={14} /> Send to Client</button>
+        <button
+          className="btn-solid"
+          onClick={() => total > 0 ? setSending(true) : toast(TriangleAlertIcon, 'Nothing to send', 'Enter hourly rates for the entries on the invoice first.')}
+        >
+          <MailIcon size={14} /> Send to Client
+        </button>
         <button className="btn-outline" onClick={printInvoice}><FileTextIcon size={14} /> Export PDF</button>
         <button className="btn-outline" onClick={() => toast(CopyIcon, 'Copied', 'Invoice link copied.')}><Share2Icon size={14} /> Share</button>
       </div>
       <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 12, lineHeight: 1.7 }}>
         Payment terms: {firm.paymentTerms}.{firm.bank && <> Bank transfer: {firm.bank}.</>}{firm.billingEmail && <> Questions: {firm.billingEmail}</>}
+      </div>
+      {sending && (
+        <SendInvoiceDialog
+          client={client} invNum={invNum} totalLabel={`${fmtCurrency(total, billingCurrency)}${includeVat ? ` incl. ${firm.vatRate}% VAT` : ' excl. VAT'}`}
+          savedEmail={clients.find(c => c.name === client)?.email || ''}
+          onClose={() => setSending(false)}
+          onSend={to => sendInvoice({
+            to, client, invNum, period: periodLabel(period), currency: billingCurrency, includeVat,
+            lines: entries.filter(e => e.included && parseFloat(rates[e.key]) > 0).map(e => ({
+              desc: e.desc, matter: e.matter, attorney: e.empName, hours: e.hours, rate: parseFloat(rates[e.key]),
+            })),
+          })}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Send to Client, confirmed twice: 1) choose the address (the client's saved email, or type one), 2) confirm the send. */
+function SendInvoiceDialog({ client, invNum, totalLabel, savedEmail, onClose, onSend }: {
+  client: string; invNum: string; totalLabel: string; savedEmail: string;
+  onClose: () => void; onSend: (to: string) => Promise<string | null>;
+}) {
+  const { toast } = useStore();
+  const [step, setStep] = useState<'recipient' | 'confirm'>('recipient');
+  const [to, setTo] = useState(savedEmail);
+  const [editing, setEditing] = useState(!savedEmail);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim());
+
+  function next() {
+    if (!valid) { setError('Enter a valid email address.'); return; }
+    setError(''); setStep('confirm');
+  }
+  async function send() {
+    setBusy(true); setError('');
+    const err = await onSend(to.trim());
+    setBusy(false);
+    if (err) { setError(err); return; }
+    toast(CircleCheckIcon, 'Invoice sent', `${invNum} emailed to ${to.trim()}.`);
+    onClose();
+  }
+
+  return (
+    <div className="modal-backdrop open" onClick={e => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div className="modal-box" style={{ maxWidth: 440 }}>
+        <div className="modal-hdr">
+          <div>
+            <div className="modal-title">{step === 'recipient' ? 'Send invoice' : 'Confirm sending'}</div>
+            <div className="modal-sub">{invNum} · {client} · {totalLabel}</div>
+          </div>
+          <button className="dp-close" onClick={onClose} disabled={busy}><XIcon size={14} /></button>
+        </div>
+        <div className="modal-body">
+          {step === 'recipient' ? (
+            <div>
+              <label className="form-label">Send to</label>
+              {editing ? (
+                <input
+                  className="input" type="email" autoFocus placeholder="client@example.com" value={to}
+                  onChange={e => { setTo(e.target.value); setError(''); }}
+                  onKeyDown={e => { if (e.key === 'Enter') next(); }}
+                />
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '9px 12px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-md)', background: 'var(--bg-overlay)' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{to}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Email on file for {client}</div>
+                  </div>
+                  <button className="btn-ghost" style={{ fontSize: 11, padding: '3px 9px' }} onClick={() => setEditing(true)}><PencilIcon size={11} /> Change</button>
+                </div>
+              )}
+              {!savedEmail && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>{client} has no email on file — type where to send the invoice.</div>}
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+              Email invoice <b style={{ color: 'var(--text-primary)' }}>{invNum}</b> for <b style={{ color: 'var(--text-primary)' }}>{totalLabel}</b> to{' '}
+              <b style={{ color: 'var(--text-primary)' }}>{to.trim()}</b>? The client receives it straight away; this can&apos;t be undone.
+            </div>
+          )}
+          {error && <div style={{ fontSize: 12, color: 'var(--p-high)', display: 'flex', gap: 6, alignItems: 'center' }}><TriangleAlertIcon size={12} /> {error}</div>}
+          <div className="modal-foot">
+            {step === 'recipient'
+              ? <><button className="btn-cancel" onClick={onClose}>Cancel</button><button className="btn-submit" onClick={next} disabled={!to.trim()}>Continue</button></>
+              : <><button className="btn-cancel" onClick={() => { setStep('recipient'); setError(''); }} disabled={busy}>Back</button>
+                  <button className="btn-submit" onClick={send} disabled={busy}>{busy ? 'Sending…' : 'Yes, send invoice'}</button></>}
+          </div>
+        </div>
       </div>
     </div>
   );

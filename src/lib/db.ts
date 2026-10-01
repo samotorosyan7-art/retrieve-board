@@ -66,13 +66,15 @@ export function rowToMember(r: Row): Member {
   return {
     id: r.id, name: r.name, init: r.init || '', role: r.role || '', color: r.color || '#7C6FF7',
     rate: Number(r.rate) || 0, img: r.img || '', email: (r.email || '').toLowerCase(),
-    isAdmin: !!r.is_admin, isBilling: !!r.is_billing, isAdmin_assistant: !!r.is_assistant,
+    isAdmin: !!r.is_admin,
   };
 }
 export function memberToRow(m: Member) {
   return {
     id: m.id, name: m.name, init: m.init, role: m.role, color: m.color, rate: m.rate || 0, img: m.img || '',
-    email: m.email.toLowerCase(), is_admin: !!m.isAdmin, is_billing: !!m.isBilling, is_assistant: !!m.isAdmin_assistant,
+    email: m.email.toLowerCase(), is_admin: !!m.isAdmin,
+    // Billing access and Admin Assistant were removed (migration 012): billing follows admin.
+    is_billing: !!m.isAdmin, is_assistant: false,
   };
 }
 export function rowToMessage(r: Row): ChatMessage {

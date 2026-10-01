@@ -15,7 +15,7 @@ export default function ChatPage() {
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const rooms = CHAT_ROOMS.filter(r => !r.billingOnly || currentUser?.isBilling || currentUser?.isAdmin);
+  const rooms = CHAT_ROOMS.filter(r => !r.billingOnly || currentUser?.isAdmin);
   const msgs = chatMessages[room] || [];
 
   // The open room counts as read; leaving the page stops that.

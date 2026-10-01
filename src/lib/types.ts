@@ -9,8 +9,6 @@ export interface Member {
   color: string;
   rate: number;
   isAdmin: boolean;
-  isBilling: boolean;
-  isAdmin_assistant?: boolean;
   img: string;
   email: string;
 }

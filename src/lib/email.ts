@@ -41,3 +41,26 @@ export async function sendMemberInvite(memberId: string): Promise<string | null>
     return 'Could not reach the server.';
   }
 }
+
+/** Email an invoice to a client (/api/notify/invoice). Admins only. Returns an error message, or null on success. */
+export async function sendInvoice(payload: {
+  to: string; client: string; invNum: string; period: string; currency: string; includeVat: boolean;
+  lines: { desc: string; matter: string; attorney: string; hours: number; rate: number }[];
+}): Promise<string | null> {
+  try {
+    const { data } = await getSupabase()!.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return 'You are signed out. Sign in again and retry.';
+    const res = await fetch('/api/notify/invoice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) return null;
+    const json = await res.json().catch(() => ({}));
+    return typeof json.error === 'string' ? json.error : `Request failed (${res.status}).`;
+  } catch (e) {
+    console.warn('Invoice send failed', e);
+    return 'Could not reach the server.';
+  }
+}
