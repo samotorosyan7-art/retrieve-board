@@ -6,7 +6,7 @@ import { LOGO_SRC } from '@/lib/constants';
 import { isOpen } from '@/lib/helpers';
 import { useNav } from './nav';
 import { useStore } from './store';
-import { Building2Icon, CalendarIcon, KeyRoundIcon, LayoutDashboardIcon, ListChecksIcon, ListIcon, LogOutIcon, MessagesSquareIcon, MoonIcon, ReceiptIcon, SettingsIcon, SquareKanbanIcon, SunIcon, TimerIcon, UsersIcon } from 'lucide-react';
+import { Building2Icon, CalendarIcon, KeyRoundIcon, LayoutDashboardIcon, ListChecksIcon, ListIcon, LogOutIcon, MessagesSquareIcon, MoonIcon, ReceiptIcon, SendIcon, SettingsIcon, SquareKanbanIcon, SunIcon, TimerIcon, UsersIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 type NavItem = { id: string; icon: LucideIcon; label: string; badge?: number; badgeStyle?: React.CSSProperties };
@@ -60,6 +60,7 @@ export function Sidebar() {
             <div className="nav-divider" />
             <div className="sb-section">Finance</div>
             {link({ id: 'billing', icon: ReceiptIcon, label: 'Billing & Invoices' })}
+            {link({ id: 'invoices', icon: SendIcon, label: 'Sent Invoices' })}
           </>
         )}
         {isAdmin && (

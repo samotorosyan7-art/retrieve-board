@@ -2594,7 +2594,7 @@ input[type=email], input[type=password], .input{
 :is(#page-list,#page-logs).page.active{display:flex;flex-direction:column;flex:none;height:calc(100vh - var(--topbar-h));overflow:hidden}
 :is(#page-list,#page-logs) .data-table-wrap{flex:1;min-height:0;overflow:auto}
 #page-list .data-table{min-width:1080px}
-:is(#page-list,#page-logs) .data-table th{top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 0 var(--border-subtle)}
+:is(#page-list,#page-logs,#page-invoices) .data-table th{top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 0 var(--border-subtle)}
 #page-logs .data-table tfoot td{position:sticky;bottom:0;background:var(--bg-overlay);border-top:1px solid var(--border-subtle);border-bottom:none}
 #page-logs .filter-row,#page-logs .page-hdr{flex-shrink:0}
 #page-list .data-table td{overflow:hidden;text-overflow:ellipsis}
@@ -2631,10 +2631,13 @@ svg.lucide{flex-shrink:0;vertical-align:-0.15em}
 }
 
 /* ── Date inputs: native calendar icon follows the theme (it was black on navy, i.e. invisible) ── */
-input[type=date]{color-scheme:dark;cursor:pointer}
-[data-theme="light"] input[type=date]{color-scheme:light}
-input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:0.7}
-input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
+input[type=date],input[type=time],input[type=month],input[type=datetime-local]{color-scheme:dark;cursor:pointer}
+[data-theme="light"] input[type=date],[data-theme="light"] input[type=time],[data-theme="light"] input[type=month],[data-theme="light"] input[type=datetime-local]{color-scheme:light}
+input[type=date]::-webkit-calendar-picker-indicator,input[type=time]::-webkit-calendar-picker-indicator,
+input[type=month]::-webkit-calendar-picker-indicator,input[type=datetime-local]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:0.7}
+input[type=date]::-webkit-calendar-picker-indicator:hover,input[type=time]::-webkit-calendar-picker-indicator:hover,
+input[type=month]::-webkit-calendar-picker-indicator:hover,input[type=datetime-local]::-webkit-calendar-picker-indicator:hover{opacity:1}
+input[type=date]:disabled,input[type=time]:disabled{cursor:not-allowed}
 
 /* ── TIME LOGS ── */
 .logs-range{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-tertiary)}
@@ -2689,3 +2692,16 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
 .chat-msg:hover .chat-del-btn,.chat-del-btn:focus-visible{opacity:1}
 .chat-del-btn:hover{color:var(--p-high)}
 @media (hover:none){.chat-del-btn{opacity:1}}
+#page-invoices .data-table tbody tr{cursor:default}
+
+/* Modals fit the window: no visible scrollbar (still scrolls on very small screens) */
+.modal-box{scrollbar-width:none;max-width:calc(100vw - 32px)}
+.modal-box::-webkit-scrollbar{display:none}
+/* Invoice window: three-column options so it fits without scrolling */
+.inv-modal .modal-hdr{padding:16px 22px 12px}
+.inv-modal .modal-body{padding:14px 22px 18px;gap:11px}
+.inv-modal-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 12px;align-items:end}
+.inv-modal-grid .seg-ctrl{display:flex}
+.inv-modal-grid .seg-btn{flex:1}
+.inv-modal-lines{display:flex;flex-direction:column;gap:6px;max-height:190px;overflow-y:auto;scrollbar-width:thin}
+@media (max-width:640px){.inv-modal-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}

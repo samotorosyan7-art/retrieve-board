@@ -117,14 +117,26 @@ export interface Credential {
 export type Currency = 'USD' | 'EUR' | 'AMD';
 
 /** Firm profile + billing configuration (Settings), stored in firm_settings (migration 006). */
+/** One of the firm's bank accounts (Settings → Billing Config); chosen per invoice. */
+export interface BankAccount {
+  id: string;
+  label: string;   // e.g. "Ameriabank · AMD"
+  details: string; // bank name, IBAN, SWIFT… as printed on the invoice
+}
+
 export interface FirmSettings {
+  /** Company (trading) name. */
   name: string;
+  /** Registered legal name, printed on invoices when set. */
+  legalName: string;
   website: string;
   address: string;
   phone: string;
   email: string;
   tin: string;
-  bank: string;
+  /** @deprecated single bank text from before multiple accounts — moved into `banks` on load. */
+  bank?: string;
+  banks: BankAccount[];
   billingEmail: string;
   vatRate: number;      // percent
   paymentTerms: string;
@@ -132,3 +144,20 @@ export interface FirmSettings {
   fxEUR: number;        // 1 USD → EUR
 }
 export type SyncState = 'hidden' | 'syncing' | 'ok' | 'error';
+
+/** An invoice emailed from Billing & Invoices (migration 015), kept exactly as sent. */
+export interface SentInvoice {
+  id: string;
+  invNum: string;
+  client: string;
+  kind: 'time' | 'amount';
+  currency: Currency;
+  total: number;
+  doc: import('./invoice').InvoiceDoc;
+  firm: FirmSettings;
+  /** Each email, oldest first. */
+  sends: { to: string; at: string; by: string }[];
+  createdBy?: string;
+  time: string;
+}
+

@@ -6,7 +6,7 @@ import { useStore } from '@/components/store';
 import { homePath } from '@/lib/helpers';
 import { PageHeader, Photo } from '@/components/ui';
 import { PAYMENT_TERMS } from '@/lib/constants';
-import type { FirmSettings } from '@/lib/types';
+import type { BankAccount, FirmSettings } from '@/lib/types';
 import { BanknoteIcon, LandmarkIcon, LockIcon, PencilIcon, PlusIcon, SaveIcon, Trash2Icon, TriangleAlertIcon, UsersIcon } from 'lucide-react';
 
 const PANELS = [
@@ -117,11 +117,15 @@ function useFirmDraft(savedMsg: string) {
       {dirty && !saving && <button className="btn-ghost" onClick={() => setDraft(firm)}>Discard</button>}
     </div>
   );
-  return { text, num, saveBtn };
+  return { draft, setDraft, text, num, saveBtn };
 }
 
 function BillingConfigPanel() {
-  const { text, num, saveBtn } = useFirmDraft('Billing config updated.');
+  const { draft, setDraft, text, num, saveBtn } = useFirmDraft('Billing config updated.');
+  const setBank = (id: string, patch: Partial<BankAccount>) =>
+    setDraft(d => ({ ...d, banks: d.banks.map(b => (b.id === id ? { ...b, ...patch } : b)) }));
+  const addBank = () => setDraft(d => ({ ...d, banks: [...d.banks, { id: 'b' + Date.now(), label: '', details: '' }] }));
+  const removeBank = (id: string) => setDraft(d => ({ ...d, banks: d.banks.filter(b => b.id !== id) }));
   return (
     <>
       <div className="settings-section">
@@ -133,7 +137,8 @@ function BillingConfigPanel() {
             1. Go to <strong>Billing &amp; Invoices</strong> and select a client<br />
             2. You&apos;ll see all their time entries for the month (description + hours)<br />
             3. Type the hourly rate for each attorney in the Rate column<br />
-            4. Totals calculate instantly — export PDF when ready
+            4. Totals calculate instantly — export PDF or send it, choosing the bank account to show<br />
+            For a fixed amount without time entries, use <strong>New monthly invoice</strong>
           </div>
         </div>
       </div>
@@ -158,10 +163,28 @@ function BillingConfigPanel() {
           </div>
         </div>
         <div className="form-row"><label className="form-label">Billing Contact Email</label><input className="input" type="email" {...text('billingEmail')} /></div>
-        <div className="form-row">
-          <label className="form-label">Bank Details</label>
-          <textarea className="input" rows={2} {...text('bank')} />
+        {saveBtn}
+      </div>
+      <div className="ss-divider" />
+      <div className="settings-section">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <div className="ss-title" style={{ marginBottom: 2 }}>Bank Accounts</div>
+            <div className="ss-sub">Choose which one to print on each invoice. The first is selected by default.</div>
+          </div>
+          <button className="btn-outline" onClick={addBank} style={{ whiteSpace: 'nowrap' }}><PlusIcon size={14} /> Add account</button>
         </div>
+        {draft.banks.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No bank accounts — invoices will be issued without bank details.</div>}
+        {draft.banks.map((b, i) => (
+          <div key={b.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-lg)', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input className="input" placeholder="Name, e.g. Ameriabank · AMD" value={b.label} onChange={e => setBank(b.id, { label: e.target.value })} />
+              {i === 0 && <span className="ur-badge member" style={{ whiteSpace: 'nowrap' }}>Default</span>}
+              <button className="ur-action" title="Remove account" style={{ color: 'var(--p-high)' }} onClick={() => removeBank(b.id)}><Trash2Icon size={12} /></button>
+            </div>
+            <textarea className="input" rows={2} placeholder={'Bank, account holder, IBAN, SWIFT…'} value={b.details} onChange={e => setBank(b.id, { details: e.target.value })} />
+          </div>
+        ))}
         {saveBtn}
       </div>
     </>
@@ -177,7 +200,8 @@ function FirmPanel() {
     <div className="settings-section">
       <div className="ss-title">Firm Profile</div>
       <div className="ss-sub">Details shown on invoices and client-facing documents.</div>
-      <div className="form-grid">{field('Firm Name', 'name')}{field('Website', 'website')}</div>
+      <div className="form-grid">{field('Company Name', 'name')}{field('Legal Name', 'legalName')}</div>
+      {field('Website', 'website')}
       {field('Address', 'address')}
       <div className="form-grid">{field('Phone', 'phone')}{field('Email', 'email')}</div>
       {field('TIN / Tax ID', 'tin')}

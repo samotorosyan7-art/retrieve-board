@@ -1,5 +1,5 @@
-import { FILE_TYPES, MAX_FILE_BYTES, PRIORITIES, STATUSES } from './constants';
-import type { Currency, Member, Project } from './types';
+import { DEFAULT_FIRM, FILE_TYPES, MAX_FILE_BYTES, PRIORITIES, STATUSES } from './constants';
+import type { Currency, FirmSettings, Member, Project } from './types';
 
 export const stat = (id: string) => STATUSES.find(s => s.id === id) ?? STATUSES[0];
 export const pri = (id: string) => PRIORITIES.find(p => p.id === id) ?? PRIORITIES[1];
@@ -124,7 +124,7 @@ export function makeInitials(name: string, taken: string[]) {
 }
 
 /** Pages only admins can open; members are sent to their own tasks. */
-export const ADMIN_PAGES = ['logs', 'settings'];
+export const ADMIN_PAGES = ['logs', 'settings', 'invoices'];
 /** Where a member lands after signing in or being turned away from a page. */
 export const homePath = (user: Member | null) => (user?.isAdmin ? '/dashboard' : '/tasks');
 /** Only admins make tasks private (members may still make their own private task public). */
@@ -144,3 +144,10 @@ export function checkFile(f: File) {
   return null;
 }
 
+/** Fill missing fields from DEFAULT_FIRM; the old single `bank` text becomes the first bank account. */
+export function normalizeFirm(raw: Partial<FirmSettings> | null | undefined): FirmSettings {
+  const f = { ...DEFAULT_FIRM, ...(raw || {}) };
+  if (!raw?.banks) f.banks = raw?.bank ? [{ id: 'main', label: 'Main account', details: raw.bank }] : DEFAULT_FIRM.banks;
+  delete f.bank;
+  return f;
+}

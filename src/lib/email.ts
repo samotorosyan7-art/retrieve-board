@@ -1,3 +1,4 @@
+import type { InvoiceDoc } from './invoice';
 import { getSupabase } from './supabase';
 
 /* Emails sent server-side via Resend: task assignments (/api/notify/matter-assigned) and member invitations (/api/notify/member-invite). */
@@ -42,11 +43,8 @@ export async function sendMemberInvite(memberId: string): Promise<string | null>
   }
 }
 
-/** Email an invoice to a client (/api/notify/invoice). Admins only. Returns an error message, or null on success. */
-export async function sendInvoice(payload: {
-  to: string; client: string; invNum: string; period: string; currency: string; includeVat: boolean;
-  lines: { desc: string; matter: string; attorney: string; hours: number; rate: number }[];
-}): Promise<string | null> {
+/** Email an invoice to a client (/api/notify/invoice), or send a saved one again (`invoiceId`). Admins only. Returns an error message, or null on success. */
+export async function sendInvoice(payload: { to: string; bankId?: string; doc: InvoiceDoc } | { to: string; invoiceId: string }): Promise<string | null> {
   try {
     const { data } = await getSupabase()!.auth.getSession();
     const token = data.session?.access_token;

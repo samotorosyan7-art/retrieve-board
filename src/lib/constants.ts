@@ -33,7 +33,7 @@ export const CHAT_ROOMS: { id: string; name: string; icon: LucideIcon; desc: str
 export const PAGE_LABELS: Record<string, string> = {
   dashboard:'Dashboard', kanban:'Kanban Board', list:'All Tasks', calendar:'Calendar',
   team:'Team Workload', logs:'Time Logs', tasks:'My Tasks', clients:'Clients', chat:'Team Chat',
-  billing:'Billing & Invoices', settings:'Settings & Access',
+  billing:'Billing & Invoices', invoices:'Sent Invoices', settings:'Settings & Access',
 };
 
 export const DEFAULT_FX = { USD: 1, EUR: 0.92, AMD: 390 }; // approximate rates — updated in Settings
@@ -41,12 +41,13 @@ export const DEFAULT_FX = { USD: 1, EUR: 0.92, AMD: 390 }; // approximate rates 
 /** Used until firm_settings has loaded, and for any field it doesn't have yet. */
 export const DEFAULT_FIRM: FirmSettings = {
   name: 'Retrieve Legal & Tax',
+  legalName: '',
   website: 'retrieve.am',
   address: 'Baghramyan 41, Yerevan, Armenia',
   phone: '+374 41 777 332',
   email: 'info@retrieve.am',
   tin: 'AM 1234567',
-  bank: 'Ameriabank OJSC · IBAN: AM12 3456 7890 1234 5678',
+  banks: [{ id: 'main', label: 'Ameriabank', details: 'Ameriabank OJSC · IBAN: AM12 3456 7890 1234 5678' }],
   billingEmail: 'billing@retrieve.am',
   vatRate: 20,
   paymentTerms: 'Net 30 days',

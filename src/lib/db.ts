@@ -1,7 +1,7 @@
 import { DEFAULT_FIRM, FILE_TYPES } from './constants';
-import { fileExt } from './helpers';
+import { fileExt, normalizeFirm } from './helpers';
 import { getSupabase } from './supabase';
-import type { Activity, Attachment, ChatMessage, Client, FirmSettings, Member, Project, TaskComment, TaskFile } from './types';
+import type { Activity, Attachment, ChatMessage, Client, FirmSettings, Member, Project, SentInvoice, TaskComment, TaskFile } from './types';
 
 /* ── Row converters (DB snake_case ↔ app camelCase) ── */
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -173,6 +173,16 @@ export async function loadMessages(roomId: string) {
   return (data || []).map(rowToMessage);
 }
 
+/** Invoices already emailed to clients, newest first (migration 015, admins only). */
+export async function loadSentInvoices(): Promise<SentInvoice[]> {
+  const { data, error } = await getSupabase()!.from('invoices').select('*').order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(r => ({
+    id: r.id, invNum: r.inv_num, client: r.client, kind: r.kind, currency: r.currency, total: Number(r.total) || 0,
+    doc: r.doc, firm: normalizeFirm(r.firm), sends: r.sends || [], createdBy: r.created_by || undefined, time: r.created_at,
+  }));
+}
+
 /** Delete one of your own chat messages (migration 014: the row stays as a "deleted" placeholder). */
 export async function deleteMessage(id: string | number) {
   const { data, error } = await getSupabase()!.from('messages')
@@ -237,8 +247,9 @@ export async function loadFirmSettings(): Promise<FirmSettings> {
   if (!sb) return DEFAULT_FIRM;
   const { data, error } = await sb.from('firm_settings').select('data').eq('id', 'firm').maybeSingle();
   if (error) throw error;
-  return { ...DEFAULT_FIRM, ...(data?.data || {}) };
+  return normalizeFirm(data?.data);
 }
+
 
 export async function saveFirmSettings(firm: FirmSettings) {
   const sb = getSupabase();

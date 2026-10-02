@@ -26,6 +26,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (passwordRecovery) router.replace('/reset-password');
   }, [authStatus, passwordRecovery, router]);
 
+  // Date and time fields open their picker from a click anywhere in the field, not just on the icon.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const el = e.target as HTMLInputElement;
+      if (el instanceof HTMLInputElement && /^(date|time|month|datetime-local)$/.test(el.type) && !el.disabled && !el.readOnly) {
+        try { el.showPicker(); } catch {} // unsupported browser, or already open
+      }
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, []);
+
   // Every move to another section starts at the top of the page.
   useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); }, [pathname]);
 
