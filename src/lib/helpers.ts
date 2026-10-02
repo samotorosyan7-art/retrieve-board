@@ -1,4 +1,4 @@
-import { PRIORITIES, STATUSES } from './constants';
+import { FILE_TYPES, MAX_FILE_BYTES, PRIORITIES, STATUSES } from './constants';
 import type { Currency, Member, Project } from './types';
 
 export const stat = (id: string) => STATUSES.find(s => s.id === id) ?? STATUSES[0];
@@ -129,3 +129,18 @@ export const ADMIN_PAGES = ['logs', 'settings'];
 export const homePath = (user: Member | null) => (user?.isAdmin ? '/dashboard' : '/tasks');
 /** Only admins make tasks private (members may still make their own private task public). */
 export const canMakePrivate = (user: Member | null) => !!user?.isAdmin;
+
+/** "340 KB", "2.4 MB". */
+export const fmtBytes = (n: number) =>
+  n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${+(n / 1024 / 1024).toFixed(1)} MB`;
+
+export const fileExt = (name: string) => (name.includes('.') ? name.split('.').pop()!.toLowerCase() : '');
+
+/** Why a file can't be attached, or null if it can (5 MB, allowed types — same rules as the storage bucket). */
+export function checkFile(f: File) {
+  if (!FILE_TYPES[fileExt(f.name)]) return `${f.name}: this file type isn't allowed. Use PDF, Office documents, text, ZIP or images.`;
+  if (f.size === 0) return `${f.name} is empty.`;
+  if (f.size > MAX_FILE_BYTES) return `${f.name} is ${fmtBytes(f.size)} — the limit is ${fmtBytes(MAX_FILE_BYTES)} per file.`;
+  return null;
+}
+

@@ -82,12 +82,30 @@ export interface TaskComment {
   time: string;
 }
 
+/** A file in the attachments bucket (migration 013). `name` is the original file name. */
+export interface Attachment {
+  path: string;
+  name: string;
+  size: number;
+  mime: string;
+}
+
+export interface TaskFile extends Attachment {
+  id: string;
+  projectId: string;
+  who: string;
+  time: string;
+}
+
 export interface ChatMessage {
   id: string | number;
   room: string;
   who: string;
   text: string;
   time: string;
+  attachment?: Attachment;
+  /** Deleted by its sender (migration 014): shown as a placeholder, text and file gone. */
+  deleted?: boolean;
 }
 
 export interface Credential {

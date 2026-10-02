@@ -2667,3 +2667,25 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
 .sb-collapsed .m-card{min-width:0}
 .sb-collapsed .mc-foot{flex-wrap:wrap;gap:4px}
 
+
+/* Attachments (tasks + chat) */
+.file-drop-zone.dragging{border-color:var(--s-intake);background:rgba(124,111,247,0.07)}
+.file-drop-zone.busy{cursor:progress;opacity:0.8}
+.file-link{display:block;width:100%;background:none;border:none;padding:0;text-align:left;cursor:pointer;font-family:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-link:hover{text-decoration:underline}
+.chat-attach-btn{width:38px;height:38px;flex-shrink:0;border-radius:var(--r-lg);border:1px solid var(--border-subtle);background:transparent;color:var(--text-tertiary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--fast) var(--ease)}
+.chat-attach-btn:hover:not(:disabled){border-color:var(--border-default);color:var(--text-primary)}
+.chat-attach-btn:disabled{cursor:progress;opacity:0.6}
+.chat-file{display:flex;align-items:center;gap:8px;min-width:200px;max-width:320px}
+.chat-file .file-row{padding:0;border:none;flex:1;min-width:0}
+.chat-img{display:block;max-width:260px;max-height:220px;border-radius:var(--r-md);cursor:pointer;object-fit:cover;background:var(--bg-overlay)}
+.chat-pending-file{display:flex;align-items:center;gap:8px;margin:0 16px;padding:6px 10px;border:1px solid var(--border-subtle);border-bottom:none;border-radius:var(--r-lg) var(--r-lg) 0 0;font-size:12px;color:var(--text-secondary);background:var(--bg-overlay)}
+.chat-main.dragging{outline:2px dashed rgba(124,111,247,0.45);outline-offset:-6px}
+.fdz-limit{display:inline-block;margin-top:6px;font-size:10.5px;font-weight:700;color:var(--s-inprogress);background:rgba(232,168,56,0.12);padding:2px 8px;border-radius:var(--r-full)}
+.chat-file-hint{display:flex;align-items:center;gap:5px;padding:0 16px 10px;margin-top:-4px;font-size:10.5px;color:var(--text-tertiary)}
+.chat-file-hint b{color:var(--text-secondary)}
+.chat-deleted{display:flex;align-items:center;gap:6px;font-style:italic;color:var(--text-tertiary)!important;background:transparent!important;border:1px dashed var(--border-default)!important}
+.chat-del-btn{background:none;border:none;padding:0 2px;color:var(--text-tertiary);cursor:pointer;opacity:0;transition:opacity var(--fast) var(--ease);display:inline-flex}
+.chat-msg:hover .chat-del-btn,.chat-del-btn:focus-visible{opacity:1}
+.chat-del-btn:hover{color:var(--p-high)}
+@media (hover:none){.chat-del-btn{opacity:1}}

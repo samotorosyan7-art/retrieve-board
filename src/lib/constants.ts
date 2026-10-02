@@ -58,3 +58,30 @@ export const PAYMENT_TERMS = ['Net 30 days', 'Net 15 days', 'Due on receipt'];
 export const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', AMD: '֏' };
 
 export const LOGO_SRC = '/logo.jpg';
+
+/** Attachments (migration 013): max size per file — the storage bucket enforces the same limit. */
+export const MAX_FILE_BYTES = 5 * 1024 * 1024;
+/** Allowed attachment types by extension → the MIME type stored (must match the bucket's allowed list). */
+export const FILE_TYPES: Record<string, string> = {
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  odt: 'application/vnd.oasis.opendocument.text',
+  ods: 'application/vnd.oasis.opendocument.spreadsheet',
+  rtf: 'application/rtf',
+  txt: 'text/plain',
+  csv: 'text/csv',
+  zip: 'application/zip',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  heic: 'image/heic',
+};
+export const FILE_ACCEPT = Object.keys(FILE_TYPES).map(e => '.' + e).join(',');
+

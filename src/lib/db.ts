@@ -1,6 +1,7 @@
-import { DEFAULT_FIRM } from './constants';
+import { DEFAULT_FIRM, FILE_TYPES } from './constants';
+import { fileExt } from './helpers';
 import { getSupabase } from './supabase';
-import type { Activity, ChatMessage, Client, FirmSettings, Member, Project, TaskComment } from './types';
+import type { Activity, Attachment, ChatMessage, Client, FirmSettings, Member, Project, TaskComment, TaskFile } from './types';
 
 /* ── Row converters (DB snake_case ↔ app camelCase) ── */
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -78,10 +79,65 @@ export function memberToRow(m: Member) {
   };
 }
 export function rowToMessage(r: Row): ChatMessage {
-  return { id: r.id, room: r.room_id, who: r.sender_id, text: r.content, time: r.created_at };
+  return { id: r.id, room: r.room_id, who: r.sender_id, text: r.content, time: r.created_at,
+    ...(r.attachment ? { attachment: r.attachment } : {}), ...(r.deleted_at ? { deleted: true } : {}) };
 }
 export function rowToComment(r: Row): TaskComment {
   return { id: r.id, projectId: r.project_id, who: r.who, text: r.text, time: r.created_at };
+}
+
+export function rowToTaskFile(r: Row): TaskFile {
+  return { id: r.id, projectId: r.project_id, path: r.path, name: r.name, size: r.size, mime: r.mime, who: r.who, time: r.created_at };
+}
+
+/* ── Attachments (migration 013): private "attachments" bucket ── */
+const BUCKET = 'attachments';
+
+/** Upload a file under tasks/<id>/ or chat/<room>/. Stored under a random name (storage only allows
+ *  ASCII names); the original name is kept alongside. Callers check the size/type first (checkFile). */
+export async function uploadAttachment(folder: string, file: File): Promise<Attachment> {
+  const ext = fileExt(file.name);
+  const mime = FILE_TYPES[ext];
+  const path = `${folder}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await getSupabase()!.storage.from(BUCKET).upload(path, file, { contentType: mime, upsert: false });
+  if (error) throw error;
+  return { path, name: file.name.slice(0, 255), size: file.size, mime };
+}
+
+export async function removeAttachment(path: string) {
+  const { data, error } = await getSupabase()!.storage.from(BUCKET).remove([path]);
+  if (error) throw error;
+  if (!data?.length) throw new Error('The file was not removed');
+}
+
+/** A short-lived link to a file. With `download`, the browser saves it under its original name. */
+export async function attachmentUrl(path: string, download?: string) {
+  const { data, error } = await getSupabase()!.storage.from(BUCKET)
+    .createSignedUrl(path, 300, download ? { download } : undefined);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+export async function loadTaskFiles(projectId: string) {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb.from('task_files').select('*').eq('project_id', projectId).order('created_at');
+  if (error) throw error;
+  return (data || []).map(rowToTaskFile);
+}
+
+export async function addTaskFile(projectId: string, who: string, a: Attachment) {
+  const { data, error } = await getSupabase()!
+    .from('task_files').insert({ project_id: projectId, who, path: a.path, name: a.name, size: a.size, mime: a.mime })
+    .select('*').single();
+  if (error) throw error;
+  return rowToTaskFile(data);
+}
+
+export async function deleteTaskFile(id: string) {
+  const { data, error } = await getSupabase()!.from('task_files').delete().eq('id', id).select('id');
+  if (error) throw error;
+  if (!data?.length) throw new Error('Delete from task_files affected no rows');
 }
 
 /* ── Reads ── */
@@ -115,6 +171,14 @@ export async function loadMessages(roomId: string) {
     .limit(100);
   if (error) throw error;
   return (data || []).map(rowToMessage);
+}
+
+/** Delete one of your own chat messages (migration 014: the row stays as a "deleted" placeholder). */
+export async function deleteMessage(id: string | number) {
+  const { data, error } = await getSupabase()!.from('messages')
+    .update({ deleted_at: new Date().toISOString() }).eq('id', id).select('id');
+  if (error) throw error;
+  if (!data?.length) throw new Error('The message was not deleted');
 }
 
 /** Unread messages per room for the signed-in member (migration 005). */
@@ -195,7 +259,7 @@ export type Mutation =
   | { type: 'member'; entity: Member }
   | { type: 'member_delete'; id: string }
   | { type: 'activity'; entity: { who: string; text: string } }
-  | { type: 'message'; entity: { room: string; who: string; text: string } };
+  | { type: 'message'; entity: { room: string; who: string; text: string; attachment?: Attachment } };
 
 export async function write(m: Mutation) {
   const sb = getSupabase();
@@ -216,7 +280,10 @@ export async function write(m: Mutation) {
     case 'member_delete': res = await del('team_members', m.id); break;
     case 'activity':      res = await sb.from('activity').insert({ who: m.entity.who, text: m.entity.text }); break;
     case 'message':
-      res = await sb.from('messages').insert({ room_id: m.entity.room, sender_id: m.entity.who, content: m.entity.text });
+      res = await sb.from('messages').insert({
+        room_id: m.entity.room, sender_id: m.entity.who, content: m.entity.text,
+        ...(m.entity.attachment ? { attachment: m.entity.attachment } : {}),
+      });
       break;
   }
   if (res.error) throw res.error;

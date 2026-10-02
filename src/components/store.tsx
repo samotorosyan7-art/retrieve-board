@@ -3,16 +3,16 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { CHAT_ROOMS, DEFAULT_FIRM } from '@/lib/constants';
 import {
-  addComment, deleteComment, loadAll, loadChatUnread, loadComments, loadFirmSettings, loadLastLogins, loadMessages, markChatRead, saveFirmSettings,
+  addComment, addTaskFile, deleteComment, deleteMessage, deleteTaskFile, loadAll, loadTaskFiles, removeAttachment, rowToTaskFile, uploadAttachment, loadChatUnread, loadComments, loadFirmSettings, loadLastLogins, loadMessages, markChatRead, saveFirmSettings,
   rowToActivity, rowToClient, rowToComment, rowToMember, rowToMessage, rowToProject, write, type Mutation,
 } from '@/lib/db';
 import { sendMatterAssignmentEmail } from '@/lib/email';
-import { canDeleteMatter, canEditTitle, canMakePrivate, dmRoom, stat, today } from '@/lib/helpers';
+import { checkFile, canDeleteMatter, canEditTitle, canMakePrivate, dmRoom, stat, today } from '@/lib/helpers';
 import { getSupabase } from '@/lib/supabase';
 import type {
-  Activity, ChatMessage, Client, Currency, FirmSettings, Member, Project, StatusId, SyncState, TaskComment, TimeLog,
+  Activity, ChatMessage, Client, Currency, FirmSettings, Member, Project, StatusId, SyncState, TaskComment, TaskFile, TimeLog,
 } from '@/lib/types';
-import { ArchiveIcon, MessageSquareIcon, GlobeIcon, LockIcon, MailIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
+import { ArchiveIcon, MessageSquareIcon, PaperclipIcon, GlobeIcon, LockIcon, MailIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /* ── localStorage: theme (always) + a per-user data cache for instant paint, wiped on sign-out ── */
@@ -68,6 +68,8 @@ function useStoreValue() {
   const [chatUnreadByRoom, setChatUnreadByRoom] = useState<Record<string, number>>({});
   // Comments per task, loaded when its panel opens (migration 011) and kept live by realtime.
   const [comments, setComments] = useState<Record<string, TaskComment[]>>({});
+  // Files per task, loaded when its panel opens (migration 013) and kept live by realtime.
+  const [taskFiles, setTaskFiles] = useState<Record<string, TaskFile[]>>({});
   // Member id → last sign-in time (admins only, migration 011). null until loaded.
   const [lastLogins, setLastLogins] = useState<Record<string, string> | null>(null);
 
@@ -213,7 +215,7 @@ function useStoreValue() {
   // While signed in: cached data → live data → realtime. On sign-out: clear everything.
   useEffect(() => {
     if (!sessionEmail) {
-      setTeam([]); setProjects([]); setClients([]); setActivity([]); setChatMessages({}); setChatUnreadByRoom({}); setComments({}); setLastLogins(null);
+      setTeam([]); setProjects([]); setClients([]); setActivity([]); setChatMessages({}); setChatUnreadByRoom({}); setComments({}); setTaskFiles({}); setLastLogins(null);
       setTeamLoaded(false); setSelectedPid(null); setModal(null);
       return;
     }
@@ -227,7 +229,7 @@ function useStoreValue() {
     const sb = getSupabase();
     if (!sb) return;
     const channel = sb.channel('retrieve-live');
-    for (const table of ['team_members', 'projects', 'clients', 'activity', 'task_comments']) {
+    for (const table of ['team_members', 'projects', 'clients', 'activity', 'task_comments', 'task_files']) {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, payload => applyRealtime(table, payload));
     }
     let connectedOnce = false;
@@ -248,6 +250,16 @@ function useStoreValue() {
       const i = ownActivity.current.indexOf(`${row.who}|${row.text}`);
       if (i > -1) { ownActivity.current.splice(i, 1); return; } // echo of our own entry
       setActivity(list => [rowToActivity(row), ...list].slice(0, 20));
+      return;
+    }
+    if (table === 'task_files') {
+      if (payload.eventType === 'DELETE') {
+        setTaskFiles(all => Object.fromEntries(Object.entries(all).map(([pid, list]) => [pid, list.filter(f => f.id !== id)])));
+      } else if (payload.eventType === 'INSERT') {
+        const f = rowToTaskFile(row);
+        setTaskFiles(all => (!all[f.projectId] || all[f.projectId].some(x => x.id === f.id) ? all
+          : { ...all, [f.projectId]: [...all[f.projectId], f] }));
+      }
       return;
     }
     if (table === 'task_comments') {
@@ -319,6 +331,12 @@ function useStoreValue() {
         if (msg.who === currentUserId) return;
         if (activeChatRoom.current === msg.room && !document.hidden) markChatRead(msg.room).catch(() => {});
         else setChatUnreadByRoom(u => ({ ...u, [msg.room]: (u[msg.room] || 0) + 1 }));
+      })
+      // A message deleted by its sender becomes a placeholder for everyone; it no longer counts as unread.
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => {
+        const msg = rowToMessage(payload.new);
+        setChatMessages(all => (all[msg.room] ? { ...all, [msg.room]: all[msg.room].map(m => (m.id === msg.id ? msg : m)) } : all));
+        if (msg.deleted && msg.who !== currentUserId) refreshChatUnread();
       })
       // On every (re)connect, re-read the counts so nothing missed while offline is lost.
       .subscribe(status => { if (status === 'SUBSCRIBED') refreshChatUnread(); });
@@ -494,7 +512,10 @@ function useStoreValue() {
       onConfirm: async () => {
         setProjects(ps => ps.filter(x => x.id !== id));
         setSelectedPid(cur => (cur === id ? null : cur));
+        const files = await loadTaskFiles(id).catch(() => [] as TaskFile[]);
         if (await persist({ type: 'project_delete', id })) {
+          // The file list goes with the task; also clear the stored files (best effort — storage only lets uploaders and admins).
+          files.forEach(f => removeAttachment(f.path).catch(() => {}));
           addActivity(me(), `deleted task <b>${p.title}</b>`);
           toast(Trash2Icon, 'Task deleted', p.title);
         } else reload();
@@ -508,6 +529,66 @@ function useStoreValue() {
     notifyAssigned(saveProject(p), p.id, p.assignees);
     addActivity(me(), `created task <b>${p.title}</b>`);
     return p;
+  };
+
+  /* ── Task files ── */
+  const loadFilesFor = useCallback(async (pid: string) => {
+    try {
+      const list = await loadTaskFiles(pid);
+      setTaskFiles(all => ({ ...all, [pid]: list }));
+    } catch (e) { console.warn('Files unavailable (has migration 013 been run?)', e); }
+  }, []);
+  /** Upload files to a task, one by one. Files over 5 MB or of other types are skipped with a message. */
+  const uploadTaskFiles = async (pid: string, files: File[], onProgress?: (done: number, total: number) => void) => {
+    const who = me();
+    const p = state.current.projects.find(x => x.id === pid);
+    if (!who || !p) return 0;
+    const ok = files.filter(f => {
+      const err = checkFile(f);
+      if (err) toast(TriangleAlertIcon, 'File not attached', err);
+      return !err;
+    });
+    let added = 0;
+    for (const [i, f] of ok.entries()) {
+      onProgress?.(i, ok.length);
+      let uploaded: { path: string } | null = null;
+      try {
+        const a = await uploadAttachment(`tasks/${pid}`, f);
+        uploaded = a;
+        const row = await addTaskFile(pid, who, a);
+        setTaskFiles(all => ({ ...all, [pid]: (all[pid] || []).some(x => x.id === row.id) ? all[pid] : [...(all[pid] || []), row] }));
+        added++;
+      } catch (e) {
+        console.warn('Upload error', e);
+        if (uploaded) removeAttachment(uploaded.path).catch(() => {}); // don't leave a file nobody can see
+        toast(TriangleAlertIcon, 'Upload failed', `${f.name}: ${(e as { message?: string })?.message || 'please try again.'}`);
+      }
+    }
+    onProgress?.(ok.length, ok.length);
+    if (added) {
+      addActivity(who, added === 1 ? `attached <b>${ok[0].name}</b> to <b>${p.title}</b>` : `attached ${added} files to <b>${p.title}</b>`);
+      toast(PaperclipIcon, added === 1 ? 'File attached' : `${added} files attached`, p.title);
+    }
+    return added;
+  };
+  const removeTaskFile = (pid: string, f: TaskFile) => {
+    setConfirmState({
+      title: 'Delete file?',
+      msg: `"${f.name}" will be permanently removed from this task.`,
+      confirmLabel: 'Delete file',
+      onConfirm: async () => {
+        setTaskFiles(all => ({ ...all, [pid]: (all[pid] || []).filter(x => x.id !== f.id) }));
+        try {
+          await removeAttachment(f.path);
+          await deleteTaskFile(f.id);
+          toast(Trash2Icon, 'File deleted', f.name);
+        } catch (e) {
+          console.warn('File delete error', e);
+          toast(TriangleAlertIcon, 'Delete failed', 'Only the person who uploaded a file, or an admin, can delete it.');
+          loadFilesFor(pid);
+        }
+      },
+    });
   };
 
   /* ── Task comments ── */
@@ -607,12 +688,56 @@ function useStoreValue() {
       setChatMessages(all => ({ ...all, [room]: msgs }));
     } catch (e) { console.warn('Chat load error', e); }
   }, []);
-  const sendMessage = (room: string, text: string) => {
+  const sendMessage = (room: string, text: string, attachment?: ChatMessage['attachment']) => {
     const who = state.current.currentUser?.id;
-    if (!who || !text.trim()) return;
-    const optimistic: ChatMessage = { id: 'opt_' + Date.now(), room, who, text, time: new Date().toISOString() };
+    if (!who || !text.trim()) return Promise.resolve(false);
+    const optimistic: ChatMessage = { id: 'opt_' + Date.now(), room, who, text, time: new Date().toISOString(), ...(attachment ? { attachment } : {}) };
     setChatMessages(all => ({ ...all, [room]: [...(all[room] || []), optimistic] }));
-    write({ type: 'message', entity: { room, who, text } }).catch(e => console.warn('Chat send error', e));
+    return write({ type: 'message', entity: { room, who, text, attachment } }).then(() => true, e => {
+      console.warn('Chat send error', e);
+      setChatMessages(all => ({ ...all, [room]: (all[room] || []).filter(m => m.id !== optimistic.id) }));
+      if (attachment) toast(TriangleAlertIcon, 'Not sent', 'The file could not be sent. Please try again.');
+      return false;
+    });
+  };
+  /** Delete your own message: everyone then sees "This message was deleted". Its file is removed from storage. */
+  const deleteChatMessage = (m: ChatMessage) => {
+    if (m.who !== state.current.currentUser?.id || m.deleted || String(m.id).startsWith('opt_')) return;
+    setConfirmState({
+      title: 'Delete message?',
+      msg: `It will be removed for everyone in this conversation${m.attachment ? ', including the attached file' : ''}. They'll see that a message was deleted.`,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        const mark = (deleted: boolean) => setChatMessages(all => ({
+          ...all, [m.room]: (all[m.room] || []).map(x => (x.id === m.id ? (deleted ? { ...x, deleted: true, text: '', attachment: undefined } : m) : x)),
+        }));
+        mark(true);
+        try {
+          await deleteMessage(m.id);
+          if (m.attachment) removeAttachment(m.attachment.path).catch(() => {});
+        } catch (e) {
+          console.warn('Message delete error', e);
+          mark(false);
+          toast(TriangleAlertIcon, 'Not deleted', 'The message could not be deleted. Please try again.');
+        }
+      },
+    });
+  };
+  /** Upload a file to a chat room and post it as a message (the caption, or the file name, is its text). */
+  const sendChatFile = async (room: string, file: File, caption = '') => {
+    const err = checkFile(file);
+    if (err) { toast(TriangleAlertIcon, 'File not sent', err); return false; }
+    let a;
+    try {
+      a = await uploadAttachment(`chat/${room}`, file);
+    } catch (e) {
+      console.warn('Chat upload error', e);
+      toast(TriangleAlertIcon, 'Upload failed', `${file.name}: ${(e as { message?: string })?.message || 'please try again.'}`);
+      return false;
+    }
+    const sent = await sendMessage(room, caption.trim() || a.name, a);
+    if (!sent) removeAttachment(a.path).catch(() => {});
+    return sent;
   };
   /** Admin-only (enforced by RLS). Returns whether it saved. */
   const saveFirm = async (next: FirmSettings) => {
@@ -660,6 +785,7 @@ function useStoreValue() {
     saveClient, deleteClient, saveMember, deleteMember,
     loadRoom, sendMessage, setActiveChatRoom, clearSavedState,
     comments, loadTaskComments, postComment, removeComment, lastLogins,
+    taskFiles, loadFilesFor, uploadTaskFiles, removeTaskFile, sendChatFile, deleteChatMessage,
   };
 }
 

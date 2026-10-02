@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { MATTER_TYPES, PRIORITIES, STATUSES } from '@/lib/constants';
-import { canDeleteMatter, canEditTitle, canMakePrivate, fmtAgo, fmtDate, fmtDue, isOD, pri, progColor, stat, today } from '@/lib/helpers';
+import { useEffect, useRef, useState } from 'react';
+import { FILE_ACCEPT, MATTER_TYPES, MAX_FILE_BYTES, PRIORITIES, STATUSES } from '@/lib/constants';
+import { canDeleteMatter, canEditTitle, canMakePrivate, fmtAgo, fmtBytes, fmtDate, fmtDue, isOD, pri, progColor, stat, today } from '@/lib/helpers';
 import type { Project } from '@/lib/types';
+import { FileRow } from './Attachments';
 import { useStore } from './store';
-import { Photo, Tag } from './ui';
-import { ArchiveIcon, CalendarIcon, CircleCheckIcon, CopyIcon, FlagIcon, MessageSquareIcon, SendIcon, GlobeIcon, LinkIcon, LockIcon, PencilIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserCheckIcon, UserPlusIcon, XIcon } from 'lucide-react';
+import { Photo } from './ui';
+import { ArchiveIcon, CalendarIcon, CircleCheckIcon, CopyIcon, FlagIcon, MessageSquareIcon, PaperclipIcon, SendIcon, GlobeIcon, LinkIcon, LockIcon, PencilIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserCheckIcon, UserPlusIcon, XIcon } from 'lucide-react';
 
 export function DetailPanel() {
   const { projects, selectedPid } = useStore();
@@ -23,6 +24,7 @@ function PanelContent({ p }: { p: Project }) {
     currentUser, team, emp, closePanel, togglePrivacy, setProgress, setStatus, patchProject,
     addTimeLog, setAssignees, setSupervisor, renameProject, addActivity, archiveProject, deleteProject, toast,
     comments, loadTaskComments, postComment, removeComment,
+    taskFiles, loadFilesFor, uploadTaskFiles, removeTaskFile,
   } = useStore();
   const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
   const isOwner = !p.createdBy || p.createdBy === currentUser?.id;
@@ -45,6 +47,18 @@ function PanelContent({ p }: { p: Project }) {
   const taskComments = comments[p.id] || [];
 
   useEffect(() => { loadTaskComments(p.id); }, [p.id, loadTaskComments]);
+  useEffect(() => { loadFilesFor(p.id); }, [p.id, loadFilesFor]);
+
+  const files = taskFiles[p.id] || [];
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [upload, setUpload] = useState<{ done: number; total: number } | null>(null);
+  async function attach(list: FileList | null) {
+    if (!list?.length || upload) return;
+    await uploadTaskFiles(p.id, [...list], (done, total) => setUpload(total ? { done, total } : null));
+    setUpload(null);
+    if (fileInput.current) fileInput.current.value = '';
+  }
 
   async function submitComment() {
     if (!commentDraft.trim() || posting) return;
@@ -88,8 +102,6 @@ function PanelContent({ p }: { p: Project }) {
       <div className="dp-header">
         <div className="dp-close-row">
           <div className="dp-tags">
-            <Tag {...pr} />
-            <Tag {...st} />
             {od && <span className="tag" style={{ background: 'rgba(248,113,113,0.12)', color: '#F87171' }}><TriangleAlertIcon size={11} /> Overdue</span>}
           </div>
           <button className="dp-close" onClick={closePanel}><XIcon size={14} /></button>
@@ -109,24 +121,20 @@ function PanelContent({ p }: { p: Project }) {
                 <PencilIcon size={12} />
               </button>
             )}
+            {canTogglePrivacy ? (
+              <button
+                className="btn-ghost" style={{ padding: '2px 6px', marginTop: 1, color: p.isPrivate ? '#7C6FF7' : undefined }}
+                title={p.isPrivate ? 'Private — only you, its supervisor and admins see it. Click to make public.' : 'Public — the whole team sees it. Click to make private.'}
+                onClick={() => togglePrivacy(p.id)}
+              >
+                {p.isPrivate ? <LockIcon size={12} /> : <GlobeIcon size={12} />}
+              </button>
+            ) : p.isPrivate && (
+              <span title="Private task" style={{ padding: '2px 6px', marginTop: 1, color: '#7C6FF7', display: 'inline-flex' }}><LockIcon size={12} /></span>
+            )}
           </div>
         )}
-        <div className="dp-client" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span>{p.client} · {p.area}</span>
-          {canTogglePrivacy && (
-            <button
-              onClick={() => togglePrivacy(p.id)}
-              style={{
-                fontSize: 11, padding: '3px 9px', borderRadius: 'var(--r-full)', cursor: 'pointer',
-                background: p.isPrivate ? 'rgba(124,111,247,0.12)' : 'var(--bg-overlay)',
-                color: p.isPrivate ? '#7C6FF7' : 'var(--text-tertiary)',
-                border: `1px solid ${p.isPrivate ? 'rgba(124,111,247,0.3)' : 'var(--border-subtle)'}`,
-              }}
-            >
-              {p.isPrivate ? <><LockIcon size={12} /> Private · make public</> : <><GlobeIcon size={12} /> Public · make private</>}
-            </button>
-          )}
-        </div>
+        <div className="dp-client">{p.client} · {p.area}</div>
       </div>
 
       <div className="dp-body">
@@ -136,64 +144,6 @@ function PanelContent({ p }: { p: Project }) {
           <div className="dp-prog-val">{p.progress}% complete</div>
           <div className="pbar"><div className="pbar-fill" style={{ width: `${p.progress}%`, background: progColor(p.progress) }} /></div>
           <input type="range" min={0} max={100} value={p.progress} className="prog-slider" onChange={e => setProgress(p.id, +e.target.value)} />
-        </div>
-
-        {/* STATUS */}
-        <div className="dp-section">
-          <div className="dp-section-label">Status</div>
-          <div className="status-btns">
-            {STATUSES.map(s => (
-              <button
-                key={s.id}
-                className="stat-btn"
-                style={{ background: p.status === s.id ? s.col : s.bg, color: p.status === s.id ? '#fff' : s.col, borderColor: `${s.col}44` }}
-                onClick={() => { if (setStatus(p.id, s.id)) toast(CircleCheckIcon, 'Status updated', `Moved to "${s.label}"`); }}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* PRIORITY */}
-        <div className="dp-section">
-          <div className="dp-section-label">Priority</div>
-          <div className="status-btns">
-            {PRIORITIES.map(x => (
-              <button
-                key={x.id}
-                className="stat-btn"
-                style={{ background: p.priority === x.id ? x.col : x.bg, color: p.priority === x.id ? '#fff' : x.col, borderColor: `${x.col}44` }}
-                onClick={() => { if (p.priority !== x.id) { patchProject(p.id, { priority: x.id }); toast(FlagIcon, 'Priority updated', x.label); } }}
-              >
-                {x.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* SUPERVISOR — can be set any time; also asked for when the task moves to Supervisor Review. */}
-        <div className="dp-section">
-          <div className="dp-section-label">Supervisor</div>
-          <select
-            className="input sel" value={p.supervisor || ''}
-            onChange={e => { setSupervisor(p.id, e.target.value); toast(UserCheckIcon, 'Supervisor updated', emp(e.target.value)?.name || 'None'); }}
-          >
-            <option value="">— Not set —</option>
-            {team.filter(e => !p.assignees.includes(e.id) || e.id === p.supervisor).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-          </select>
-        </div>
-
-        {/* MATTER TYPE */}
-        <div className="dp-section">
-          <div className="dp-section-label">Task Type</div>
-          <select
-            className="input sel" value={p.matterType || ''}
-            onChange={e => { patchProject(p.id, { matterType: e.target.value }); toast(TagIcon, 'Task type updated', e.target.value || 'None'); }}
-          >
-            <option value="">— Not set —</option>
-            {MATTER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
         </div>
 
         {/* DATES */}
@@ -266,55 +216,61 @@ function PanelContent({ p }: { p: Project }) {
           })}
         </div>
 
-        {/* NOTES */}
+        {/* STATUS + PRIORITY */}
         <div className="dp-section">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
-            <div className="dp-section-label" style={{ marginBottom: 0 }}>Notes</div>
-            <button
-              className="btn-ghost" style={{ fontSize: 10.5, padding: '3px 9px' }}
-              onClick={() => { patchProject(p.id, { notes: notes.trim() }); toast(SaveIcon, 'Notes saved', 'Task notes updated.'); }}
-            >
-              Save
-            </button>
+          <div className="form-grid">
+            <div>
+              <div className="dp-section-label">Status</div>
+              {/* Supervisor Review asks who reviews it first, so the dropdown keeps showing the saved status until then. */}
+              <select
+                className="input sel" value={p.status} style={{ color: st.col, fontWeight: 600 }}
+                onChange={e => {
+                  const s = STATUSES.find(x => x.id === e.target.value)!;
+                  if (setStatus(p.id, s.id)) toast(CircleCheckIcon, 'Status updated', `Moved to "${s.label}"`);
+                }}
+              >
+                {STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="dp-section-label">Priority</div>
+              <select
+                className="input sel" value={p.priority} style={{ color: pr.col, fontWeight: 600 }}
+                onChange={e => {
+                  const x = PRIORITIES.find(y => y.id === e.target.value)!;
+                  patchProject(p.id, { priority: x.id });
+                  toast(FlagIcon, 'Priority updated', x.label);
+                }}
+              >
+                {PRIORITIES.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
+              </select>
+            </div>
           </div>
-          <textarea className="input" rows={3} style={{ resize: 'vertical', fontSize: 12.5, lineHeight: 1.6 }} value={notes} onChange={e => setNotes(e.target.value)} />
         </div>
 
-        {/* COMMENTS */}
+        {/* SUPERVISOR (can be set any time; also asked for when the task moves to Supervisor Review) + TASK TYPE */}
         <div className="dp-section">
-          <div className="dp-section-label">Comments{taskComments.length ? ` · ${taskComments.length}` : ''}</div>
-          {taskComments.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 10 }}>No comments yet.</div>}
-          {taskComments.map(c => {
-            const e = emp(c.who);
-            const canDelete = isAdmin || c.who === currentUser?.id;
-            return (
-              <div key={c.id} className="feed-item">
-                <div className="feed-av" style={{ background: e?.color }}><Photo src={e?.img} /></div>
-                <div className="feed-content" style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                    <span className="feed-text"><span className="bold">{e?.name || 'Former member'}</span></span>
-                    <span className="feed-time" title={new Date(c.time).toLocaleString('en-GB')}>{fmtAgo(c.time)}</span>
-                    {canDelete && (
-                      <button className="btn-ghost" title="Delete comment" style={{ marginLeft: 'auto', padding: '1px 5px' }} onClick={() => removeComment(p.id, c.id)}>
-                        <Trash2Icon size={11} />
-                      </button>
-                    )}
-                  </div>
-                  <div className="feed-text" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{c.text}</div>
-                </div>
-              </div>
-            );
-          })}
-          <textarea
-            className="input" rows={2} placeholder="Write a comment… (⌘/Ctrl + Enter to post)"
-            style={{ resize: 'vertical', fontSize: 12.5, lineHeight: 1.6, marginTop: 8 }}
-            value={commentDraft} onChange={e => setCommentDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submitComment(); } }}
-          />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-            <button className="btn-solid" style={{ fontSize: 12, padding: '6px 12px' }} disabled={!commentDraft.trim() || posting} onClick={submitComment}>
-              {posting ? <MessageSquareIcon size={12} /> : <SendIcon size={12} />} Post
-            </button>
+          <div className="form-grid">
+            <div>
+              <div className="dp-section-label">Supervisor</div>
+              <select
+                className="input sel" value={p.supervisor || ''}
+                onChange={e => { setSupervisor(p.id, e.target.value); toast(UserCheckIcon, 'Supervisor updated', emp(e.target.value)?.name || 'None'); }}
+              >
+                <option value="">— Not set —</option>
+                {team.filter(e => !p.assignees.includes(e.id) || e.id === p.supervisor).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="dp-section-label">Task Type</div>
+              <select
+                className="input sel" value={p.matterType || ''}
+                onChange={e => { patchProject(p.id, { matterType: e.target.value }); toast(TagIcon, 'Task type updated', e.target.value || 'None'); }}
+              >
+                <option value="">— Not set —</option>
+                {MATTER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -370,6 +326,83 @@ function PanelContent({ p }: { p: Project }) {
           ) : (
             <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>No time logged yet.</div>
           )}
+        </div>
+
+        {/* NOTES */}
+        <div className="dp-section">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
+            <div className="dp-section-label" style={{ marginBottom: 0 }}>Notes</div>
+            <button
+              className="btn-ghost" style={{ fontSize: 10.5, padding: '3px 9px' }}
+              onClick={() => { patchProject(p.id, { notes: notes.trim() }); toast(SaveIcon, 'Notes saved', 'Task notes updated.'); }}
+            >
+              Save
+            </button>
+          </div>
+          <textarea className="input" rows={3} style={{ resize: 'vertical', fontSize: 12.5, lineHeight: 1.6 }} value={notes} onChange={e => setNotes(e.target.value)} />
+        </div>
+
+        {/* COMMENTS */}
+        <div className="dp-section">
+          <div className="dp-section-label">Comments{taskComments.length ? ` · ${taskComments.length}` : ''}</div>
+          {taskComments.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 10 }}>No comments yet.</div>}
+          {taskComments.map(c => {
+            const e = emp(c.who);
+            const canDelete = isAdmin || c.who === currentUser?.id;
+            return (
+              <div key={c.id} className="feed-item">
+                <div className="feed-av" style={{ background: e?.color }}><Photo src={e?.img} /></div>
+                <div className="feed-content" style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span className="feed-text"><span className="bold">{e?.name || 'Former member'}</span></span>
+                    <span className="feed-time" title={new Date(c.time).toLocaleString('en-GB')}>{fmtAgo(c.time)}</span>
+                    {canDelete && (
+                      <button className="btn-ghost" title="Delete comment" style={{ marginLeft: 'auto', padding: '1px 5px' }} onClick={() => removeComment(p.id, c.id)}>
+                        <Trash2Icon size={11} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="feed-text" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{c.text}</div>
+                </div>
+              </div>
+            );
+          })}
+          <textarea
+            className="input" rows={2} placeholder="Write a comment… (⌘/Ctrl + Enter to post)"
+            style={{ resize: 'vertical', fontSize: 12.5, lineHeight: 1.6, marginTop: 8 }}
+            value={commentDraft} onChange={e => setCommentDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submitComment(); } }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+            <button className="btn-solid" style={{ fontSize: 12, padding: '6px 12px' }} disabled={!commentDraft.trim() || posting} onClick={submitComment}>
+              {posting ? <MessageSquareIcon size={12} /> : <SendIcon size={12} />} Add comment
+            </button>
+          </div>
+        </div>
+
+        {/* FILES */}
+        <div className="dp-section">
+          <div className="dp-section-label">Attachments{files.length ? ` · ${files.length}` : ''}</div>
+          <div
+            className={`file-drop-zone${dragOver ? ' dragging' : ''}${upload ? ' busy' : ''}`}
+            onClick={() => !upload && fileInput.current?.click()}
+            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={e => { e.preventDefault(); setDragOver(false); attach(e.dataTransfer.files); }}
+          >
+            <div className="fdz-icon"><PaperclipIcon size={20} /></div>
+            <div className="fdz-txt">{upload ? `Uploading ${Math.min(upload.done + 1, upload.total)} of ${upload.total}…` : 'Drop files here or click to attach'}</div>
+            <div className="fdz-limit">Max {fmtBytes(MAX_FILE_BYTES)} per file</div>
+            <div className="fdz-sub">PDF, Office, text, ZIP or images</div>
+          </div>
+          <input ref={fileInput} type="file" multiple accept={FILE_ACCEPT} hidden onChange={e => attach(e.target.files)} />
+          {files.length ? files.map(f => (
+            <FileRow
+              key={f.id} a={f}
+              meta={`${emp(f.who)?.name.split(' ')[0] || 'Former member'} · ${fmtAgo(f.time)}`}
+              onDelete={isAdmin || f.who === currentUser?.id ? () => removeTaskFile(p.id, f) : undefined}
+            />
+          )) : <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>No files attached.</div>}
         </div>
 
         {/* ACTIONS */}

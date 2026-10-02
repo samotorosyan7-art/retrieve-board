@@ -14,7 +14,8 @@ import { LockIcon } from 'lucide-react';
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { authStatus, passwordRecovery, currentUser, toast } = useStore();
   const router = useRouter();
-  const page = usePathname().split('/')[1] || 'dashboard';
+  const pathname = usePathname();
+  const page = pathname.split('/')[1] || 'dashboard';
   const blocked = authStatus === 'signedIn' && !currentUser?.isAdmin && ADMIN_PAGES.includes(page);
 
   useEffect(() => {
@@ -24,6 +25,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     // Signed in from a password-reset link: set the new password before using the app.
     if (passwordRecovery) router.replace('/reset-password');
   }, [authStatus, passwordRecovery, router]);
+
+  // Every move to another section starts at the top of the page.
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); }, [pathname]);
 
   // Members can't open admin pages (Logs, Settings).
   useEffect(() => {
