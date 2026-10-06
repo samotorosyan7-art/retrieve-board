@@ -9,6 +9,8 @@ export interface Member {
   color: string;
   rate: number;
   isAdmin: boolean;
+  /** "Administration" access level (migration 016): sees tasks assigned to Administration; members don't. */
+  isAdministration: boolean;
   img: string;
   email: string;
 }

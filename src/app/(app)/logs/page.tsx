@@ -38,7 +38,7 @@ export default function LogsPage() {
   }, [currentUser, router, toast]);
   const set = (k: keyof Filters) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(x => ({ ...x, [k]: e.target.value }));
 
-  const visible = projects.filter(p => canSeeMatter(p, currentUser));
+  const visible = projects.filter(p => canSeeMatter(p, currentUser, team));
   const all: Row[] = visible.flatMap(p => (p.timeLogs || []).map((l, i) => ({ ...l, p, key: `${p.id}:${i}` })));
   const q = (f.q || search).toLowerCase();
   const rows = all

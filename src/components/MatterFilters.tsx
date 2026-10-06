@@ -31,7 +31,7 @@ const matchesStat = (p: Project, stat: string) =>
 
 /** Filter state + the visible, filtered, sorted matter list (Kanban and List pages). All filters combine (AND). */
 export function useMatterFilters() {
-  const { projects, currentUser, search } = useStore();
+  const { projects, team, currentUser, search } = useStore();
   // useSearchParams, not window.location: on in-app navigation the new page renders before the address bar updates.
   const params = useSearchParams();
   const [f, setF] = useState<Filters>(() => fromParams(params));
@@ -42,7 +42,7 @@ export function useMatterFilters() {
   const q = search.toLowerCase();
 
   let list = projects.filter(p => {
-    if (!canSeeMatter(p, currentUser)) return false;
+    if (!canSeeMatter(p, currentUser, team)) return false;
     if (f.client && p.client !== f.client) return false;
     if (f.type && (p.matterType || '') !== f.type) return false;
     if (f.emp && !p.assignees.includes(f.emp)) return false;
@@ -66,7 +66,7 @@ export function MatterFilterRow({
   filters, setFilters, clear, withStatus = false,
 }: ReturnType<typeof useMatterFilters> & { withStatus?: boolean }) {
   const { projects, team, currentUser } = useStore();
-  const clientNames = [...new Set(projects.filter(p => canSeeMatter(p, currentUser)).map(p => p.client).filter(Boolean))].sort();
+  const clientNames = [...new Set(projects.filter(p => canSeeMatter(p, currentUser, team)).map(p => p.client).filter(Boolean))].sort();
   const bind = (k: keyof Filters) => ({
     value: filters[k],
     onChange: (e: React.ChangeEvent<HTMLSelectElement>) => setFilters(f => ({ ...f, [k]: e.target.value })),

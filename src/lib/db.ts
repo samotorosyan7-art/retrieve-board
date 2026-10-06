@@ -10,6 +10,8 @@ type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-exp
    detect their absence on load and simply don't send them (the values stay in the local cache). */
 const OPTIONAL_PROJECT_COLS = ['matter_type', 'is_private', 'created_by', 'supervisor', 'due_time'] as const;
 const projectCols = new Set<string>();
+/* team_members.is_administration (migration 016) — not sent until the column exists. */
+let hasAdministrationCol = false;
 
 export function projectToRow(p: Project) {
   const optional: Row = {};
@@ -67,7 +69,7 @@ export function rowToMember(r: Row): Member {
   return {
     id: r.id, name: r.name, init: r.init || '', role: r.role || '', color: r.color || '#7C6FF7',
     rate: Number(r.rate) || 0, img: r.img || '', email: (r.email || '').toLowerCase(),
-    isAdmin: !!r.is_admin,
+    isAdmin: !!r.is_admin, isAdministration: !!r.is_administration,
   };
 }
 export function memberToRow(m: Member) {
@@ -76,6 +78,7 @@ export function memberToRow(m: Member) {
     email: m.email.toLowerCase(), is_admin: !!m.isAdmin,
     // Billing access and Admin Assistant were removed (migration 012): billing follows admin.
     is_billing: !!m.isAdmin, is_assistant: false,
+    ...(hasAdministrationCol ? { is_administration: !m.isAdmin && !!m.isAdministration } : {}),
   };
 }
 export function rowToMessage(r: Row): ChatMessage {
@@ -153,6 +156,7 @@ export async function loadAll() {
   for (const res of [mRes, pRes, cRes, aRes]) if (res.error) throw res.error;
   const sample = pRes.data?.[0];
   if (sample) for (const c of OPTIONAL_PROJECT_COLS) if (c in sample) projectCols.add(c);
+  hasAdministrationCol = !!mRes.data?.[0] && 'is_administration' in mRes.data[0];
   return {
     team: (mRes.data || []).map(rowToMember),
     projects: (pRes.data || []).map(rowToProject),
@@ -269,7 +273,7 @@ export type Mutation =
   | { type: 'client_delete'; id: string }
   | { type: 'member'; entity: Member }
   | { type: 'member_delete'; id: string }
-  | { type: 'activity'; entity: { who: string; text: string } }
+  | { type: 'activity'; entity: { who: string; text: string; restricted?: boolean } }
   | { type: 'message'; entity: { room: string; who: string; text: string; attachment?: Attachment } };
 
 export async function write(m: Mutation) {
@@ -289,7 +293,7 @@ export async function write(m: Mutation) {
     case 'client_delete': res = await del('clients', m.id); break;
     case 'member':        res = await sb.from('team_members').upsert(memberToRow(m.entity), { onConflict: 'id' }); break;
     case 'member_delete': res = await del('team_members', m.id); break;
-    case 'activity':      res = await sb.from('activity').insert({ who: m.entity.who, text: m.entity.text }); break;
+    case 'activity':      res = await sb.from('activity').insert({ who: m.entity.who, text: m.entity.text, ...(m.entity.restricted ? { restricted: true } : {}) }); break;
     case 'message':
       res = await sb.from('messages').insert({
         room_id: m.entity.room, sender_id: m.entity.who, content: m.entity.text,

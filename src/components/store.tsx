@@ -7,7 +7,7 @@ import {
   rowToActivity, rowToClient, rowToComment, rowToMember, rowToMessage, rowToProject, write, type Mutation,
 } from '@/lib/db';
 import { sendMatterAssignmentEmail } from '@/lib/email';
-import { checkFile, canDeleteMatter, canEditTitle, canMakePrivate, dmRoom, stat, today } from '@/lib/helpers';
+import { checkFile, canDeleteMatter, canEditTitle, canMakePrivate, dmRoom, isAdministrationTask, stat, today } from '@/lib/helpers';
 import { getSupabase } from '@/lib/supabase';
 import type {
   Activity, ChatMessage, Client, Currency, FirmSettings, Member, Project, StatusId, SyncState, TaskComment, TaskFile, TimeLog,
@@ -380,12 +380,14 @@ function useStoreValue() {
   };
 
   /* ── Activity ── */
-  const addActivity = (who: string, text: string) => {
+  /** `about`: the task(s) the entry mentions — entries about administration tasks are hidden from members (migration 016). */
+  const addActivity = (who: string, text: string, about: Project[] = []) => {
+    const restricted = about.some(p => isAdministrationTask(p, state.current.team));
     setActivity(list =>
       [{ who, text, time: 'Just now' }, ...list.map(a => (a.time === 'Just now' ? { ...a, time: 'Minutes ago' } : a))].slice(0, 20),
     );
     ownActivity.current.push(`${who}|${text}`);
-    persist({ type: 'activity', entity: { who, text } });
+    persist({ type: 'activity', entity: { who, text, restricted } });
   };
   const me = () => state.current.currentUser?.id ?? '';
 
@@ -417,7 +419,7 @@ function useStoreValue() {
     const leavingReview = state.current.projects.find(x => x.id === id)?.status === 'review';
     const p = patchProject(id, leavingReview ? { status, supervisor: undefined } : { status });
     if (!p) return false;
-    addActivity(me(), `moved <b>${p.title}</b> to ${stat(status).label}`);
+    addActivity(me(), `moved <b>${p.title}</b> to ${stat(status).label}`, [p]);
     return true;
   };
   const memberName = (id: string) => state.current.team.find(e => e.id === id)?.name.split(' ')[0] || 'someone';
@@ -425,12 +427,12 @@ function useStoreValue() {
   const sendToReview = (id: string, supervisor: string) => {
     const p = patchProject(id, { status: 'review', supervisor });
     if (!p) return;
-    addActivity(me(), `sent <b>${p.title}</b> to ${memberName(supervisor)} for supervisor review`);
+    addActivity(me(), `sent <b>${p.title}</b> to ${memberName(supervisor)} for supervisor review`, [p]);
   };
   const setSupervisor = (id: string, supervisor: string) => {
     const p = patchProject(id, { supervisor: supervisor || undefined });
     if (!p) return;
-    addActivity(me(), supervisor ? `made ${memberName(supervisor)} supervisor of <b>${p.title}</b>` : `removed the supervisor of <b>${p.title}</b>`);
+    addActivity(me(), supervisor ? `made ${memberName(supervisor)} supervisor of <b>${p.title}</b>` : `removed the supervisor of <b>${p.title}</b>`, [p]);
   };
   const progressTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const setProgress = (id: string, progress: number) => {
@@ -471,10 +473,11 @@ function useStoreValue() {
   const setAssignees = (id: string, assignees: string[]) => {
     const user = state.current.currentUser;
     if (!user?.isAdmin) { toast(LockIcon, 'Admins only', 'Only admins can reassign a task.'); return; }
+    const before = state.current.projects.find(x => x.id === id);
     const p = patchProject(id, { assignees });
-    if (!p) return;
+    if (!p || !before) return;
     const names = assignees.map(a => state.current.team.find(e => e.id === a)?.name.split(' ')[0]).filter(Boolean).join(', ');
-    addActivity(user.id, `assigned <b>${p.title}</b> to ${names || 'nobody'}`);
+    addActivity(user.id, `assigned <b>${p.title}</b> to ${names || 'nobody'}`, [before, p]);
   };
   const renameProject = (id: string, title: string) => {
     const p = state.current.projects.find(x => x.id === id);
@@ -484,7 +487,7 @@ function useStoreValue() {
       return false;
     }
     patchProject(id, { title });
-    addActivity(me(), `renamed <b>${p.title}</b> to <b>${title}</b>`);
+    addActivity(me(), `renamed <b>${p.title}</b> to <b>${title}</b>`, [p]);
     return true;
   };
   /** Put a billable time entry on, or take it off, the client's invoice. Admins only (time entries are admin-edit, migration 003). */
@@ -516,7 +519,7 @@ function useStoreValue() {
         if (await persist({ type: 'project_delete', id })) {
           // The file list goes with the task; also clear the stored files (best effort — storage only lets uploaders and admins).
           files.forEach(f => removeAttachment(f.path).catch(() => {}));
-          addActivity(me(), `deleted task <b>${p.title}</b>`);
+          addActivity(me(), `deleted task <b>${p.title}</b>`, [p]);
           toast(Trash2Icon, 'Task deleted', p.title);
         } else reload();
       },
@@ -527,7 +530,7 @@ function useStoreValue() {
       ...data, id: 'p' + Date.now(), progress: 0, created: today(), timeLogs: [], files: [], createdBy: me(),
     };
     notifyAssigned(saveProject(p), p.id, p.assignees);
-    addActivity(me(), `created task <b>${p.title}</b>`);
+    addActivity(me(), `created task <b>${p.title}</b>`, [p]);
     return p;
   };
 
@@ -566,7 +569,7 @@ function useStoreValue() {
     }
     onProgress?.(ok.length, ok.length);
     if (added) {
-      addActivity(who, added === 1 ? `attached <b>${ok[0].name}</b> to <b>${p.title}</b>` : `attached ${added} files to <b>${p.title}</b>`);
+      addActivity(who, added === 1 ? `attached <b>${ok[0].name}</b> to <b>${p.title}</b>` : `attached ${added} files to <b>${p.title}</b>`, [p]);
       toast(PaperclipIcon, added === 1 ? 'File attached' : `${added} files attached`, p.title);
     }
     return added;
@@ -606,7 +609,7 @@ function useStoreValue() {
     try {
       const c = await addComment(pid, who, text.trim());
       setComments(all => ({ ...all, [pid]: (all[pid] || []).some(x => x.id === c.id) ? all[pid] : [...(all[pid] || []), c] }));
-      addActivity(who, `commented on <b>${p.title}</b>`);
+      addActivity(who, `commented on <b>${p.title}</b>`, [p]);
       return true;
     } catch (e) {
       console.warn('Comment error', e);

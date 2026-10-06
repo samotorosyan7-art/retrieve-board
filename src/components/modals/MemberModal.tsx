@@ -8,16 +8,18 @@ import { useStore } from '../store';
 import { ModalFooter, ModalHeader } from './ModalHost';
 import { CircleCheckIcon, MailIcon, TriangleAlertIcon } from 'lucide-react';
 
-type Access = 'member' | 'admin';
+type Access = 'member' | 'administration' | 'admin';
 
 export function MemberModal({ id }: { id: string | null }) {
   const { team, saveMember, toast, closeModal } = useStore();
   const e = id ? team.find(x => x.id === id) : undefined;
+  // Fixed up front: once saved, the new member is in `team` while the invite sends — they mustn't clash with themselves.
+  const [memberId] = useState(() => e?.id ?? 'u' + Date.now());
   const [name, setName] = useState(e?.name || '');
   const [init, setInit] = useState(e?.init || '');
   // Initials follow the name until someone types their own.
   const [initEdited, setInitEdited] = useState(!!e?.init);
-  const takenInits = team.filter(x => x.id !== e?.id).map(x => x.init.toUpperCase()).filter(Boolean);
+  const takenInits = team.filter(x => x.id !== memberId).map(x => x.init.toUpperCase()).filter(Boolean);
   const initClash = !!init.trim() && takenInits.includes(init.trim().toUpperCase());
   const changeName = (v: string) => { setName(v); if (!initEdited) setInit(makeInitials(v, takenInits)); };
   const [role, setRole] = useState(e?.role || '');
@@ -26,7 +28,7 @@ export function MemberModal({ id }: { id: string | null }) {
   const [color, setColor] = useState(e?.color || '#7C6FF7');
   const [img, setImg] = useState(e?.img || '');
   const [access, setAccess] = useState<Access>(
-    e?.isAdmin ? 'admin' : 'member',
+    e?.isAdmin ? 'admin' : e?.isAdministration ? 'administration' : 'member',
   );
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
@@ -35,14 +37,15 @@ export function MemberModal({ id }: { id: string | null }) {
     const n = name.trim(), r = role.trim(), em = email.trim().toLowerCase();
     if (!n || !r || !em) { toast(TriangleAlertIcon, 'Required', 'Name, role and email are required.'); return; }
     if (initClash) { toast(TriangleAlertIcon, 'Initials in use', `${init.trim().toUpperCase()} already belongs to another member.`); return; }
-    if (team.some(x => x.email.toLowerCase() === em && x.id !== e?.id)) { toast(TriangleAlertIcon, 'Email in use', `${em} already belongs to another member.`); return; }
+    if (team.some(x => x.email.toLowerCase() === em && x.id !== memberId)) { toast(TriangleAlertIcon, 'Email in use', `${em} already belongs to another member.`); return; }
     const member: Member = {
-      id: e?.id ?? 'u' + Date.now(),
+      id: memberId,
       name: n, role: r, email: em,
       init: init.trim().toUpperCase() || makeInitials(n, takenInits),
       rate: parseInt(rate || '0') || 0,
       color, img: img.trim(),
       isAdmin: access === 'admin',
+      isAdministration: access === 'administration',
     };
     setBusy(true);
     const ok = await saveMember(member);
@@ -84,7 +87,7 @@ export function MemberModal({ id }: { id: string | null }) {
               onChange={x => { setInit(x.target.value.toUpperCase()); setInitEdited(!!x.target.value); }}
               style={initClash ? { borderColor: 'var(--p-high)' } : undefined}
             />
-            {initClash && <div style={{ fontSize: 11, color: 'var(--p-high)', marginTop: 4 }}>Already used by {team.find(x => x.id !== e?.id && x.init.toUpperCase() === init.trim().toUpperCase())?.name}</div>}
+            {initClash && <div style={{ fontSize: 11, color: 'var(--p-high)', marginTop: 4 }}>Already used by {team.find(x => x.id !== memberId && x.init.toUpperCase() === init.trim().toUpperCase())?.name}</div>}
           </div>
         </div>
         <div className="form-grid">
@@ -107,8 +110,14 @@ export function MemberModal({ id }: { id: string | null }) {
             <label className="form-label">Access Level</label>
             <select className="input sel" value={access} onChange={x => setAccess(x.target.value as Access)}>
               <option value="member">Member (standard)</option>
+              <option value="administration">Administration</option>
               <option value="admin">Full Admin</option>
             </select>
+            {access === 'administration' && (
+              <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', lineHeight: 1.5, marginTop: 6 }}>
+                Sees every task except private ones. Tasks assigned to them are hidden from members.
+              </div>
+            )}
           </div>
           <div>
             <label className="form-label">Password</label>

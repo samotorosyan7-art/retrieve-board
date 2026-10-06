@@ -59,7 +59,7 @@ function UsersPanel() {
         <button className="btn-solid" onClick={() => setModal({ kind: 'member', id: null })} style={{ whiteSpace: 'nowrap' }}><PlusIcon size={14} /> Add Member</button>
       </div>
       {team.map(e => {
-        const level = e.isAdmin ? 'admin' : 'member';
+        const level = e.isAdmin ? 'admin' : e.isAdministration ? 'administration' : 'member';
         return (
           <div key={e.id} className="user-row">
             <div className="ur-av" style={{ background: e.color, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 11, color: '#fff' }}>

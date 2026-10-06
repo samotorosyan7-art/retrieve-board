@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { AREAS, MATTER_TYPES, PRIORITIES, STATUSES } from '@/lib/constants';
 import type { PriorityId, StatusId } from '@/lib/types';
-import { canMakePrivate } from '@/lib/helpers';
+import { canMakePrivate, seesAdministrationTasks } from '@/lib/helpers';
 import { useStore } from '../store';
 import { Photo } from '../ui';
 import { ModalFooter, ModalHeader } from './ModalHost';
@@ -25,6 +25,8 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
   const [supervisor, setSupervisor] = useState('');
   const [notes, setNotes] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
+  // Members can't hand work to Administration — the task would vanish from their board (migration 016).
+  const assignable = seesAdministrationTasks(currentUser) ? team : team.filter(e => !e.isAdministration);
 
   // One assignee per task: picking someone replaces the previous pick; clicking them again clears it.
   const toggleAssign = (id: string) => {
@@ -89,7 +91,7 @@ export function MatterModal({ client: initialClient = '' }: { client?: string })
         <div>
           <label className="form-label">Assign To</label>
           <div className="assign-row">
-            {team.map(e => (
+            {assignable.map(e => (
               <div key={e.id} className={`assign-chip${assignees.includes(e.id) ? ' sel' : ''}`} onClick={() => toggleAssign(e.id)}>
                 <div className="ac-mini-av"><Photo src={e.img} /></div>
                 <span>{e.name.split(' ')[0]}</span>

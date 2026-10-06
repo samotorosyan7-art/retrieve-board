@@ -92,10 +92,17 @@ export function clientColor(name: string) {
 export const clientInitials = (name: string) =>
   name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
 
-export function canSeeMatter(p: Project, user: Member | null) {
-  if (!p.isPrivate) return true;
-  if (!user) return false;
-  return p.createdBy === user.id || p.supervisor === user.id || user.isAdmin;
+/** Assigned to an Administration member — hidden from regular members (matches migration 016). */
+export const isAdministrationTask = (p: Project, team: Member[]) =>
+  p.assignees.some(a => team.some(m => m.id === a && m.isAdministration));
+
+/** Admins and Administration members see administration tasks. */
+export const seesAdministrationTasks = (user: Member | null) => !!user && (user.isAdmin || user.isAdministration);
+
+export function canSeeMatter(p: Project, user: Member | null, team: Member[]) {
+  if (!user) return !p.isPrivate;
+  if (p.isPrivate && !(p.createdBy === user.id || p.supervisor === user.id || user.isAdmin)) return false;
+  return seesAdministrationTasks(user) || !isAdministrationTask(p, team);
 }
 
 /** Admins delete any task; members only tasks they created (matches migration 004). */
@@ -120,6 +127,8 @@ export function makeInitials(name: string, taken: string[]) {
   const a = first[0];
   const seconds = [...last, ...first.slice(1), ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
   for (const b of seconds) if (!used.has(a + b)) return a + b;
+  // Every pair starting with their initial is taken — use any free pair.
+  for (const x of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') for (const y of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (!used.has(x + y)) return x + y;
   return a + (last[0] || first[1] || '');
 }
 

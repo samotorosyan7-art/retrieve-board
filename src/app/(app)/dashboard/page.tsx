@@ -12,7 +12,7 @@ export default function DashboardPage() {
   const { go } = useNav();
 
   // Each KPI opens All Tasks with the same filter, so the list matches the number.
-  const visible = projects.filter(p => canSeeMatter(p, currentUser));
+  const visible = projects.filter(p => canSeeMatter(p, currentUser, team));
   const kpis = [
     { val: visible.length, label: 'Total Tasks', sub: 'across all areas', color: '#7C6FF7', href: 'list' },
     { val: visible.filter(p => p.status === 'inprogress').length, label: 'In Progress', sub: 'in progress now', color: '#E8A838', href: 'list?stat=inprogress' },

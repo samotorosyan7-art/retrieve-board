@@ -81,7 +81,7 @@ function PanelContent({ p }: { p: Project }) {
     if (!canLogTime) return;
     if (!desc || !hours || !who) { toast(TriangleAlertIcon, 'Missing info', 'Please fill in all fields.'); return; }
     addTimeLog(p.id, { who, hours, desc, date: today(), month: new Date().getMonth() + 1, billable: tfBillable });
-    addActivity(currentUser?.id || who, `logged <b>${hours}h</b>${tfBillable ? '' : ' (non-billable)'} on <b>${p.title}</b>`);
+    addActivity(currentUser?.id || who, `logged <b>${hours}h</b>${tfBillable ? '' : ' (non-billable)'} on <b>${p.title}</b>`, [p]);
     toast(TimerIcon, 'Time logged', `${hours}h${tfBillable ? '' : ' non-billable'} added to ${p.title}`);
     setTfDesc(''); setTfHours(''); setTfBillable(true); setFormOpen(false);
   }

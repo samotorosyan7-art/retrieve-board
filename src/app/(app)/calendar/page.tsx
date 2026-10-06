@@ -8,7 +8,7 @@ import type { Project } from '@/lib/types';
 import { ChevronLeftIcon, ChevronRightIcon, ClipboardListIcon, TriangleAlertIcon } from 'lucide-react';
 
 export default function CalendarPage() {
-  const { projects, currentUser, openPanel } = useStore();
+  const { projects, team, currentUser, openPanel } = useStore();
   const now = new Date();
   const [{ m, y }, setMonth] = useState({ m: now.getMonth(), y: now.getFullYear() });
   // Days opened with "+N more" show every deadline instead of the first three.
@@ -26,7 +26,7 @@ export default function CalendarPage() {
   const inMonth = (s: string) => { const d = new Date(s); return d.getFullYear() === y && d.getMonth() === m; };
 
   // Every deadline the signed-in member can see.
-  const mine = (p: Project) => canSeeMatter(p, currentUser);
+  const mine = (p: Project) => canSeeMatter(p, currentUser, team);
 
   // Task deadlines grouped by day of month
   const byDate: Record<number, Project[]> = {};

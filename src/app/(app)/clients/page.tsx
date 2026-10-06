@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
 import { AvStack, PageHeader, Tag } from '@/components/ui';
-import { clientColor, clientInitials, firstWords, fmtDate, fmtDue, isOpen, pri, stat } from '@/lib/helpers';
+import { canSeeMatter, clientColor, clientInitials, firstWords, fmtDate, fmtDue, isOpen, pri, stat } from '@/lib/helpers';
 import type { Client } from '@/lib/types';
 import { Building2Icon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 
 export default function ClientsPage() {
-  const { clients, projects, setModal } = useStore();
+  const { clients, projects, team, currentUser, setModal } = useStore();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -51,7 +51,7 @@ export default function ClientsPage() {
             {filtered.length === 0 ? (
               <div style={{ padding: 24, textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)' }}>No clients found</div>
             ) : filtered.map(c => {
-              const n = projects.filter(p => p.client === c.name).length;
+              const n = projects.filter(p => p.client === c.name && canSeeMatter(p, currentUser, team)).length;
               return (
                 <div key={c.id} className={`client-row${c.id === sel?.id ? ' active' : ''}`} onClick={() => setSelectedId(c.id)}>
                   <div className="cr-avatar" style={{ background: clientColor(c.name) }}>{clientInitials(c.name)}</div>
@@ -86,11 +86,11 @@ export default function ClientsPage() {
 }
 
 function ClientDetail({ c, onDeleted }: { c: Client; onDeleted: () => void }) {
-  const { projects, setModal, deleteClient } = useStore();
+  const { projects, team, currentUser, setModal, deleteClient } = useStore();
   const { openMatter } = useNav();
   const [areaFilter, setAreaFilter] = useState('all');
 
-  const all = projects.filter(p => p.client === c.name);
+  const all = projects.filter(p => p.client === c.name && canSeeMatter(p, currentUser, team));
   const areaMap: Record<string, typeof all> = {};
   all.forEach(p => { (areaMap[p.area || 'Other'] ||= []).push(p); });
   const areas = Object.keys(areaMap).sort();
