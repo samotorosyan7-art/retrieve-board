@@ -96,13 +96,16 @@ export const clientInitials = (name: string) =>
 export const isAdministrationTask = (p: Project, team: Member[]) =>
   p.assignees.some(a => team.some(m => m.id === a && m.isAdministration));
 
-/** Admins and Administration members see administration tasks. */
+/** Admins and Administration members may assign tasks to Administration (migration 016). */
 export const seesAdministrationTasks = (user: Member | null) => !!user && (user.isAdmin || user.isAdministration);
 
+/** Matches can_see_task (migration 017). Administration members see only their own tasks. */
 export function canSeeMatter(p: Project, user: Member | null, team: Member[]) {
   if (!user) return !p.isPrivate;
-  if (p.isPrivate && !(p.createdBy === user.id || p.supervisor === user.id || user.isAdmin)) return false;
-  return seesAdministrationTasks(user) || !isAdministrationTask(p, team);
+  if (user.isAdmin) return true;
+  const mine = p.assignees.includes(user.id) || p.createdBy === user.id || p.supervisor === user.id;
+  if (p.isPrivate && p.createdBy !== user.id && p.supervisor !== user.id) return false;
+  return user.isAdministration ? mine : !isAdministrationTask(p, team);
 }
 
 /** Admins delete any task; members only tasks they created (matches migration 004). */

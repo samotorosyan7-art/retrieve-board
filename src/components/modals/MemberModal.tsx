@@ -115,7 +115,7 @@ export function MemberModal({ id }: { id: string | null }) {
             </select>
             {access === 'administration' && (
               <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', lineHeight: 1.5, marginTop: 6 }}>
-                Sees every task except private ones. Tasks assigned to them are hidden from members.
+                Sees only their own tasks. Tasks assigned to them are hidden from members.
               </div>
             )}
           </div>
