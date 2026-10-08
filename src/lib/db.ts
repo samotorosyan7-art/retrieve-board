@@ -165,6 +165,13 @@ export async function loadAll() {
   };
 }
 
+/** Rows of one table by id, for live updates (migration 018). Rows hidden by row-level security don't come back. */
+export async function loadRows(table: string, ids: (string | number)[]): Promise<Row[]> {
+  const { data, error } = await getSupabase()!.from(table).select('*').in('id', ids);
+  if (error) throw error;
+  return data || [];
+}
+
 export async function loadMessages(roomId: string) {
   const sb = getSupabase();
   if (!sb) return [];

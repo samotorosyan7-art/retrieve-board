@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { CHAT_ROOMS, DEFAULT_FIRM } from '@/lib/constants';
 import {
-  addComment, addTaskFile, deleteComment, deleteMessage, deleteTaskFile, loadAll, loadTaskFiles, removeAttachment, rowToTaskFile, uploadAttachment, loadChatUnread, loadComments, loadFirmSettings, loadLastLogins, loadMessages, markChatRead, saveFirmSettings,
+  addComment, addTaskFile, deleteComment, deleteMessage, deleteTaskFile, loadAll, loadTaskFiles, removeAttachment, rowToTaskFile, uploadAttachment, loadChatUnread, loadRows, loadComments, loadFirmSettings, loadLastLogins, loadMessages, markChatRead, saveFirmSettings,
   rowToActivity, rowToClient, rowToComment, rowToMember, rowToMessage, rowToProject, write, type Mutation,
 } from '@/lib/db';
 import { sendMatterAssignmentEmail } from '@/lib/email';
@@ -26,6 +26,48 @@ function readCache(owner: string): Snapshot | null {
     const snap = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null') as Snapshot | null;
     return snap?.owner === owner ? snap : null;
   } catch { return null; }
+}
+
+/* ── Live updates (migration 018): the database broadcasts only { table, op, id } on a private channel. Changed rows
+   are then read through the API (batched per table), so row-level security still decides what each member sees. ── */
+type LiveChange = { table: string; op: 'INSERT' | 'UPDATE' | 'DELETE'; id: string | number };
+type LiveRow = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+/** `apply` gets the row as this member can see it now, or null if it's deleted or hidden from them. */
+function subscribeLive(topic: string, apply: (c: LiveChange, row: LiveRow | null) => void, onSubscribed: () => void) {
+  const sb = getSupabase()!;
+  const queued = new Map<string, Map<string, LiveChange>>(); // table → id → change
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let closed = false;
+  const flush = () => {
+    timer = undefined;
+    const batches = [...queued];
+    queued.clear();
+    for (const [table, changes] of batches) {
+      loadRows(table, [...changes.values()].map(c => c.id))
+        .then(rows => {
+          if (closed) return;
+          const byId = new Map(rows.map(r => [String(r.id), r]));
+          changes.forEach((c, id) => apply(c, byId.get(id) ?? null));
+        })
+        .catch(e => console.warn('Live update failed', e));
+    }
+  };
+  const channel = sb.channel(topic, { config: { private: true } })
+    .on('broadcast', { event: 'change' }, ({ payload }) => {
+      const c = payload as LiveChange;
+      const id = String(c.id);
+      if (c.op === 'DELETE') { queued.get(c.table)?.delete(id); apply(c, null); return; }
+      const changes = queued.get(c.table) ?? new Map<string, LiveChange>();
+      queued.set(c.table, changes);
+      if (changes.get(id)?.op !== 'INSERT') changes.set(id, c); // an insert + its edits still count as an insert
+      timer ??= setTimeout(flush, 100);
+    })
+    .subscribe((status, err) => {
+      if (status === 'SUBSCRIBED') onSubscribed();
+      else if (status === 'CHANNEL_ERROR') console.warn(`Live updates unavailable on ${topic} (has migration 018 been run?)`, err);
+    });
+  return () => { closed = true; clearTimeout(timer); sb.removeChannel(channel); };
 }
 
 /** 'loading' until the session is known and (if signed in) the team is loaded.
@@ -226,18 +268,17 @@ function useStoreValue() {
     }
     reload();
 
-    const sb = getSupabase();
-    if (!sb) return;
-    const channel = sb.channel('retrieve-live');
-    for (const table of ['team_members', 'projects', 'clients', 'activity', 'task_comments', 'task_files']) {
-      channel.on('postgres_changes', { event: '*', schema: 'public', table }, payload => applyRealtime(table, payload));
-    }
+    if (!getSupabase()) return;
     let connectedOnce = false;
-    channel.subscribe(status => {
+    return subscribeLive('live:board', (c, row) => {
+      // A task, client or member we can no longer see is removed like a deleted one; other vanished rows are skipped.
+      if (!row && c.op !== 'DELETE' && !['projects', 'clients', 'team_members'].includes(c.table)) return;
+      applyRealtime(c.table, { eventType: row ? c.op : 'DELETE', new: row ?? {}, old: { id: c.id } });
+    }, () => {
       // After a dropped connection, quietly catch up on anything missed.
-      if (status === 'SUBSCRIBED') { if (connectedOnce) reload(); connectedOnce = true; }
+      if (connectedOnce) reload();
+      connectedOnce = true;
     });
-    return () => { sb.removeChannel(channel); };
   }, [sessionEmail, reload]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Apply one realtime change to local state — only the affected row re-renders. */
@@ -315,11 +356,11 @@ function useStoreValue() {
 
   // Chat realtime — only while signed in.
   useEffect(() => {
-    const sb = getSupabase();
-    if (!sb || !currentUserId) return;
-    const channel = sb.channel('chat-live')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
-        const msg = rowToMessage(payload.new);
+    if (!getSupabase() || !currentUserId) return;
+    const unsubscribe = subscribeLive('live:chat', (c, row) => {
+      if (!row) return; // a room this member can't see (messages are never hard-deleted)
+      const msg = rowToMessage(row);
+      if (c.op === 'INSERT') {
         setChatMessages(all => {
           const list = all[msg.room] || [];
           if (list.some(m => m.id === msg.id)) return all;
@@ -328,23 +369,20 @@ function useStoreValue() {
           const next = optIdx > -1 ? list.map((m, i) => (i === optIdx ? msg : m)) : [...list, msg];
           return { ...all, [msg.room]: next };
         });
-        if (msg.who === currentUserId) return;
+        if (msg.who === currentUserId || msg.deleted) return;
         if (activeChatRoom.current === msg.room && !document.hidden) markChatRead(msg.room).catch(() => {});
         else setChatUnreadByRoom(u => ({ ...u, [msg.room]: (u[msg.room] || 0) + 1 }));
-      })
-      // A message deleted by its sender becomes a placeholder for everyone; it no longer counts as unread.
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => {
-        const msg = rowToMessage(payload.new);
+      } else {
+        // A message deleted by its sender becomes a placeholder for everyone; it no longer counts as unread.
         setChatMessages(all => (all[msg.room] ? { ...all, [msg.room]: all[msg.room].map(m => (m.id === msg.id ? msg : m)) } : all));
         if (msg.deleted && msg.who !== currentUserId) refreshChatUnread();
-      })
-      // On every (re)connect, re-read the counts so nothing missed while offline is lost.
-      .subscribe(status => { if (status === 'SUBSCRIBED') refreshChatUnread(); });
+      }
+    }, refreshChatUnread); // on every (re)connect, re-read the counts so nothing missed while offline is lost
     // Counts don't depend on realtime connecting; also re-read them whenever the tab comes back.
     refreshChatUnread();
     const onVisible = () => { if (!document.hidden) refreshChatUnread(); };
     document.addEventListener('visibilitychange', onVisible);
-    return () => { sb.removeChannel(channel); document.removeEventListener('visibilitychange', onVisible); };
+    return () => { unsubscribe(); document.removeEventListener('visibilitychange', onVisible); };
   }, [currentUserId, refreshChatUnread]);
 
   /* ── Auth (Supabase Auth — passwords never touch this code) ── */
