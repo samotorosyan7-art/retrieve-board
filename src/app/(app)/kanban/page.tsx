@@ -1,6 +1,7 @@
 'use client';
 
-import { MatterFilterRow, useMatterFilters } from '@/components/MatterFilters';
+import { ExportTasksButton } from '@/components/ExportTasks';
+import { byRecentlyMoved, MatterFilterRow, useMatterFilters } from '@/components/MatterFilters';
 import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
 import { AvStack, PageHeader, Tag } from '@/components/ui';
@@ -123,6 +124,7 @@ export default function KanbanPage() {
   return (
     <div className="page active" id="page-kanban">
       <PageHeader title="Kanban" light="Board" sub={`${f.length} task${f.length !== 1 ? 's' : ''} shown · drag a card to another column to move it`}>
+        <ExportTasksButton />
         <div className="seg-ctrl">
           <button className="seg-btn" onClick={() => go('list')}>List</button>
           <button className="seg-btn active">Kanban</button>
@@ -132,7 +134,9 @@ export default function KanbanPage() {
 
       <div className="kanban" onMouseDown={onBoardMouseDown}>
         {STATUSES.map(col => {
+          // Most recently moved into this column on top, unless a sort is chosen in the filters.
           const cards = f.filter(p => p.status === col.id);
+          if (!filters.filters.sort) cards.sort(byRecentlyMoved);
           return (
             <div key={col.id} className="k-col" data-status={col.id}>
               <div className="k-col-hdr">

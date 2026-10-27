@@ -6,7 +6,7 @@ import { LOGO_SRC } from '@/lib/constants';
 import { isOpen } from '@/lib/helpers';
 import { useNav } from './nav';
 import { useStore } from './store';
-import { Building2Icon, CalendarIcon, KeyRoundIcon, LayoutDashboardIcon, ListChecksIcon, ListIcon, LogOutIcon, MessagesSquareIcon, MoonIcon, ReceiptIcon, SendIcon, SettingsIcon, SquareKanbanIcon, SunIcon, TimerIcon, UsersIcon } from 'lucide-react';
+import { Building2Icon, CalendarIcon, ClipboardCheckIcon, KeyRoundIcon, LayoutDashboardIcon, ListChecksIcon, ListIcon, LogOutIcon, MessagesSquareIcon, MoonIcon, ReceiptIcon, SendIcon, SettingsIcon, SquareKanbanIcon, SunIcon, TimerIcon, UsersIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 type NavItem = { id: string; icon: LucideIcon; label: string; badge?: number; badgeStyle?: React.CSSProperties };
@@ -53,6 +53,7 @@ export function Sidebar() {
         {link({ id: 'calendar', icon: CalendarIcon, label: 'Calendar' })}
         {link({ id: 'clients', icon: Building2Icon, label: 'Clients' })}
         {link({ id: 'team', icon: UsersIcon, label: 'Team Workload' })}
+        {link({ id: 'report', icon: ClipboardCheckIcon, label: 'Report' })}
         {isAdmin && link({ id: 'logs', icon: TimerIcon, label: 'Logs' })}
         {link({ id: 'chat', icon: MessagesSquareIcon, label: 'Team Chat', badge: chatUnread })}
         {isAdmin && (

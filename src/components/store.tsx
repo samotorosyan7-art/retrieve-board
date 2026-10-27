@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { CHAT_ROOMS, DEFAULT_FIRM } from '@/lib/constants';
 import {
-  addComment, addTaskFile, deleteComment, deleteMessage, deleteTaskFile, loadAll, loadTaskFiles, removeAttachment, rowToTaskFile, uploadAttachment, loadChatUnread, loadRows, loadComments, loadFirmSettings, loadLastLogins, loadMessages, markChatRead, saveFirmSettings,
+  addComment, addTaskFile, deleteComment, deleteMessage, deleteTaskFile, loadAll, loadTaskFiles, removeAttachment, rowToTaskFile, uploadAttachment, loadChatUnread, loadRows, loadComments, loadFirmSettings, loadLastLogins, loadMessages, markChatRead, saveFirmSettings, touchLastSeen,
   rowToActivity, rowToClient, rowToComment, rowToMember, rowToMessage, rowToProject, write, type Mutation,
 } from '@/lib/db';
 import { sendMatterAssignmentEmail } from '@/lib/email';
@@ -217,7 +217,7 @@ function useStoreValue() {
       setProjects(data.projects.map(p => {
         const old = prev.get(p.id);
         // Columns missing from the DB (before the migration) fall back to this browser's copy.
-        return old ? { matterType: old.matterType, isPrivate: old.isPrivate, createdBy: old.createdBy, supervisor: old.supervisor, dueTime: old.dueTime, ...p } : p;
+        return old ? { matterType: old.matterType, isPrivate: old.isPrivate, createdBy: old.createdBy, supervisor: old.supervisor, dueTime: old.dueTime, statusChangedAt: old.statusChangedAt, ...p } : p;
       }));
       setClients(data.clients);
       setActivity(data.activity);
@@ -331,7 +331,7 @@ function useStoreValue() {
       setProjects(ps => {
         const old = ps.find(x => x.id === id);
         const next = isDelete ? null : rowToProject(row);
-        return upsertOrDelete(ps, next && old ? { matterType: old.matterType, isPrivate: old.isPrivate, createdBy: old.createdBy, supervisor: old.supervisor, dueTime: old.dueTime, ...next } : next);
+        return upsertOrDelete(ps, next && old ? { matterType: old.matterType, isPrivate: old.isPrivate, createdBy: old.createdBy, supervisor: old.supervisor, dueTime: old.dueTime, statusChangedAt: old.statusChangedAt, ...next } : next);
       });
       if (isDelete) setSelectedPid(cur => (cur === id ? null : cur));
     } else if (table === 'clients') {
@@ -384,6 +384,29 @@ function useStoreValue() {
     document.addEventListener('visibilitychange', onVisible);
     return () => { unsubscribe(); document.removeEventListener('visibilitychange', onVisible); };
   }, [currentUserId, refreshChatUnread]);
+
+  // Last seen (migration 019): a saved session never signs in again, so record use of the app while it's open —
+  // at most once an hour per tab, however often the tab is switched back to.
+  useEffect(() => {
+    if (!getSupabase() || !currentUserId) return;
+    let last = 0;
+    const touch = () => {
+      if (document.hidden || Date.now() - last < 60 * 60_000) return;
+      last = Date.now();
+      touchLastSeen().catch(e => { last = 0; console.warn('Last seen not recorded (has migration 019 been run?)', e); });
+    };
+    touch();
+    // Checked every 5 minutes (no request unless an hour has passed), so a tab left open reports within 5 minutes of the hour.
+    const timer = setInterval(touch, 5 * 60_000);
+    document.addEventListener('visibilitychange', touch);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', touch); };
+  }, [currentUserId]);
+
+  /** Admins: re-read when each member was last seen (the dashboard keeps it current). */
+  const refreshLastLogins = useCallback(() => {
+    if (!state.current.currentUser?.isAdmin) return;
+    loadLastLogins().then(setLastLogins).catch(e => console.warn('Last logins unavailable (has migration 011 been run?)', e));
+  }, []);
 
   /* ── Auth (Supabase Auth — passwords never touch this code) ── */
   /** Returns an error message, or null on success. */
@@ -455,7 +478,9 @@ function useStoreValue() {
   const setStatus = (id: string, status: StatusId) => {
     if (status === 'review') { setModal({ kind: 'supervisor', pid: id }); return false; }
     const leavingReview = state.current.projects.find(x => x.id === id)?.status === 'review';
-    const p = patchProject(id, leavingReview ? { status, supervisor: undefined } : { status });
+    // The database stamps statusChangedAt too; set it here so the card moves to the top of its Kanban column right away.
+    const moved = { status, statusChangedAt: new Date().toISOString() };
+    const p = patchProject(id, leavingReview ? { ...moved, supervisor: undefined } : moved);
     if (!p) return false;
     addActivity(me(), `moved <b>${p.title}</b> to ${stat(status).label}`, [p]);
     return true;
@@ -463,7 +488,7 @@ function useStoreValue() {
   const memberName = (id: string) => state.current.team.find(e => e.id === id)?.name.split(' ')[0] || 'someone';
   /** Move a task to Supervisor Review with the chosen supervisor; it then shows in their My Tasks. */
   const sendToReview = (id: string, supervisor: string) => {
-    const p = patchProject(id, { status: 'review', supervisor });
+    const p = patchProject(id, { status: 'review', supervisor, statusChangedAt: new Date().toISOString() });
     if (!p) return;
     addActivity(me(), `sent <b>${p.title}</b> to ${memberName(supervisor)} for supervisor review`, [p]);
   };
@@ -565,7 +590,7 @@ function useStoreValue() {
   };
   const createProject = (data: Pick<Project, 'title' | 'client' | 'area' | 'status' | 'priority' | 'assignees' | 'due' | 'dueTime' | 'notes' | 'isPrivate' | 'matterType' | 'supervisor'>) => {
     const p: Project = {
-      ...data, id: 'p' + Date.now(), progress: 0, created: today(), timeLogs: [], files: [], createdBy: me(),
+      ...data, id: 'p' + Date.now(), progress: 0, created: today(), timeLogs: [], files: [], createdBy: me(), statusChangedAt: new Date().toISOString(),
     };
     notifyAssigned(saveProject(p), p.id, p.assignees);
     addActivity(me(), `created task <b>${p.title}</b>`, [p]);
@@ -825,7 +850,7 @@ function useStoreValue() {
     addActivity, saveProject, patchProject, setStatus, sendToReview, setSupervisor, setProgress, togglePrivacy, addTimeLog, setAssignees, renameProject, setLogInInvoice, createProject, archiveProject, deleteProject,
     saveClient, deleteClient, saveMember, deleteMember,
     loadRoom, sendMessage, setActiveChatRoom, clearSavedState,
-    comments, loadTaskComments, postComment, removeComment, lastLogins,
+    comments, loadTaskComments, postComment, removeComment, lastLogins, refreshLastLogins,
     taskFiles, loadFilesFor, uploadTaskFiles, removeTaskFile, sendChatFile, deleteChatMessage,
   };
 }

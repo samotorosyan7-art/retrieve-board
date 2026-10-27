@@ -32,7 +32,7 @@ export const CHAT_ROOMS: { id: string; name: string; icon: LucideIcon; desc: str
 
 export const PAGE_LABELS: Record<string, string> = {
   dashboard:'Dashboard', kanban:'Kanban Board', list:'All Tasks', calendar:'Calendar',
-  team:'Team Workload', logs:'Time Logs', tasks:'My Tasks', clients:'Clients', chat:'Team Chat',
+  team:'Team Workload', report:'Report', logs:'Time Logs', tasks:'My Tasks', clients:'Clients', chat:'Team Chat',
   billing:'Billing & Invoices', invoices:'Sent Invoices', settings:'Settings & Access',
 };
 

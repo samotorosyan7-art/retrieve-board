@@ -20,6 +20,14 @@ export const byDate = (key: 'due' | 'created', dir: 1 | -1, fallback: string) =>
   return (a: Project, b: Project) => dir * (t(a) - t(b));
 };
 
+/** Most recently moved into its status first (Kanban columns). Tasks with no recorded move (before migration 019)
+ *  go by when they were created — from their id ('p' + Date.now()), else the created date. */
+export const byRecentlyMoved = (a: Project, b: Project) => {
+  const t = (p: Project) => (p.statusChangedAt ? Date.parse(p.statusChangedAt)
+    : /^p\d{13}$/.test(p.id) ? Number(p.id.slice(1)) : parseDate(p.created)?.getTime() ?? 0);
+  return t(b) - t(a);
+};
+
 /** Filters seeded from the URL, e.g. /list?emp=<id> (Team Workload), /list?stat=overdue (Dashboard KPIs), /list?sort=deadline-desc. */
 const fromParams = (q: URLSearchParams): Filters =>
   ({ ...EMPTY, emp: q.get('emp') || '', stat: q.get('stat') || '', pri: q.get('pri') || '', sort: q.get('sort') || '' });

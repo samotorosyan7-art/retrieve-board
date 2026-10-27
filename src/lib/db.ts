@@ -1,7 +1,7 @@
 import { DEFAULT_FIRM, FILE_TYPES } from './constants';
 import { fileExt, normalizeFirm } from './helpers';
 import { getSupabase } from './supabase';
-import type { Activity, Attachment, ChatMessage, Client, FirmSettings, Member, Project, SentInvoice, TaskComment, TaskFile } from './types';
+import type { Activity, Attachment, ChatMessage, Client, FirmSettings, Member, Project, SentInvoice, StatusChange, TaskComment, TaskFile } from './types';
 
 /* ── Row converters (DB snake_case ↔ app camelCase) ── */
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -42,6 +42,7 @@ export function rowToProject(r: Row): Project {
     ...('created_by' in r ? { createdBy: r.created_by || undefined } : {}),
     ...('supervisor' in r ? { supervisor: r.supervisor || undefined } : {}),
     ...('due_time' in r ? { dueTime: r.due_time || undefined } : {}),
+    ...('status_changed_at' in r ? { statusChangedAt: r.status_changed_at || undefined } : {}),
   };
 }
 export function clientToRow(c: Client) {
@@ -250,6 +251,24 @@ export async function loadLastLogins(): Promise<Record<string, string>> {
   if (error) throw error;
   return Object.fromEntries(((data || []) as { member_id: string; last_login: string | null }[])
     .filter(r => r.last_login).map(r => [r.member_id, r.last_login!]));
+}
+
+/** Record that the signed-in member is using the app (migration 019; the database writes at most once a minute). */
+export async function touchLastSeen() {
+  const { error } = await getSupabase()!.rpc('touch_last_seen');
+  if (error) throw error;
+}
+
+/** Tasks moved to Completed between two times, newest first (migration 019). Only tasks this member can see. */
+export async function loadCompletions(from: Date | null, to: Date | null): Promise<StatusChange[]> {
+  let q = getSupabase()!.from('task_status_changes').select('*').eq('to_status', 'done');
+  if (from) q = q.gte('created_at', from.toISOString());
+  if (to) q = q.lt('created_at', to.toISOString());
+  const { data, error } = await q.order('created_at', { ascending: false }).limit(5000);
+  if (error) throw error;
+  return (data || []).map(r => ({
+    id: r.id, projectId: r.project_id, from: r.from_status || undefined, to: r.to_status, who: r.who || undefined, time: r.created_at,
+  }));
 }
 
 /** Firm profile + billing config (migration 006). Missing fields fall back to DEFAULT_FIRM. */

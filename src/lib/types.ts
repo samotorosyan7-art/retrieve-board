@@ -54,6 +54,18 @@ export interface Project {
   createdBy?: string;
   /** Member who reviews the task in "Supervisor Review" (migration 007). */
   supervisor?: string;
+  /** When the task entered its current status (migration 019) — set by the database, never sent. */
+  statusChangedAt?: string;
+}
+
+/** A task's status changing (migration 019). `from` is missing when the task was created with that status. */
+export interface StatusChange {
+  id: number;
+  projectId: string;
+  from?: StatusId;
+  to: StatusId;
+  who?: string;
+  time: string;
 }
 
 export interface Client {

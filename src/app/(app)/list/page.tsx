@@ -1,5 +1,6 @@
 'use client';
 
+import { ExportTasksButton } from '@/components/ExportTasks';
 import { MatterFilterRow, useMatterFilters } from '@/components/MatterFilters';
 import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
@@ -16,6 +17,7 @@ export default function ListPage() {
   return (
     <div className="page active" id="page-list">
       <PageHeader title="All" light="Tasks" sub={`${f.length} task${f.length !== 1 ? 's' : ''}`}>
+        <ExportTasksButton />
         <div className="seg-ctrl">
           <button className="seg-btn active">List</button>
           <button className="seg-btn" onClick={() => go('kanban')}>Kanban</button>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { byDate } from '@/components/MatterFilters';
 import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
@@ -8,8 +9,15 @@ import { canSeeMatter, firstWords, fmtAgo, fmtDue, isOD, isUrgent, pri, sanitize
 import { ArrowRightIcon, PartyPopperIcon, TriangleAlertIcon } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { projects, team, activity, currentUser, emp, openPanel, lastLogins } = useStore();
+  const { projects, team, activity, currentUser, emp, openPanel, lastLogins, refreshLastLogins } = useStore();
   const { go } = useNav();
+
+  // "Last seen" changes while this page is open — re-read it every minute.
+  useEffect(() => {
+    refreshLastLogins();
+    const t = setInterval(refreshLastLogins, 60_000);
+    return () => clearInterval(t);
+  }, [refreshLastLogins]);
 
   // Each KPI opens All Tasks with the same filter, so the list matches the number.
   const visible = projects.filter(p => canSeeMatter(p, currentUser, team));
@@ -109,9 +117,9 @@ export default function DashboardPage() {
                       {lastLogins && (
                         <span
                           style={{ fontSize: 10.5, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginLeft: 6 }}
-                          title={lastLogins[e.id] ? `Last login: ${new Date(lastLogins[e.id]).toLocaleString('en-GB')}` : 'Has not logged in yet'}
+                          title={lastLogins[e.id] ? `Last seen: ${new Date(lastLogins[e.id]).toLocaleString('en-GB')}` : 'Has not logged in yet'}
                         >
-                          · {lastLogins[e.id] ? `last login ${fmtAgo(lastLogins[e.id]).replace('Just now', 'just now')}` : 'never logged in'}
+                          · {lastLogins[e.id] ? `last seen ${fmtAgo(lastLogins[e.id]).replace('Just now', 'just now')}` : 'never logged in'}
                         </span>
                       )}
                     </div>
