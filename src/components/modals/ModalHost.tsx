@@ -2,6 +2,7 @@
 
 import { useStore } from '../store';
 import { ClientModal } from './ClientModal';
+import { HistoryModal } from './HistoryModal';
 import { LogTimeModal } from './LogTimeModal';
 import { MatterModal } from './MatterModal';
 import { MemberModal } from './MemberModal';
@@ -18,6 +19,7 @@ export function ModalHost() {
         {modal?.kind === 'client' && <ClientModal key={modal.id ?? 'new'} id={modal.id} onSaved={modal.onSaved} />}
         {modal?.kind === 'member' && <MemberModal key={modal.id ?? 'new'} id={modal.id} />}
         {modal?.kind === 'supervisor' && <SupervisorModal key={modal.pid} pid={modal.pid} />}
+        {modal?.kind === 'history' && <HistoryModal key={modal.pid} pid={modal.pid} />}
       </div>
     </div>
   );

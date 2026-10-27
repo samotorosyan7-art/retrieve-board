@@ -1,7 +1,7 @@
 import { DEFAULT_FIRM, FILE_TYPES } from './constants';
 import { fileExt, normalizeFirm } from './helpers';
 import { getSupabase } from './supabase';
-import type { Activity, Attachment, ChatMessage, Client, FirmSettings, Member, Project, SentInvoice, StatusChange, TaskComment, TaskFile } from './types';
+import type { Activity, Attachment, ChatMessage, Client, FirmSettings, Member, Project, SentInvoice, StatusChange, TaskComment, TaskFile, TaskNotification } from './types';
 
 /* ── Row converters (DB snake_case ↔ app camelCase) ── */
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -266,9 +266,41 @@ export async function loadCompletions(from: Date | null, to: Date | null): Promi
   if (to) q = q.lt('created_at', to.toISOString());
   const { data, error } = await q.order('created_at', { ascending: false }).limit(5000);
   if (error) throw error;
-  return (data || []).map(r => ({
-    id: r.id, projectId: r.project_id, from: r.from_status || undefined, to: r.to_status, who: r.who || undefined, time: r.created_at,
-  }));
+  return (data || []).map(rowToStatusChange);
+}
+
+/** Every status change of one task, oldest first (migration 019). */
+export async function loadStatusHistory(projectId: string): Promise<StatusChange[]> {
+  const { data, error } = await getSupabase()!.from('task_status_changes').select('*')
+    .eq('project_id', projectId).order('created_at', { ascending: true }).order('id', { ascending: true });
+  if (error) throw error;
+  return (data || []).map(rowToStatusChange);
+}
+
+const rowToStatusChange = (r: Row): StatusChange => ({
+  id: r.id, projectId: r.project_id, from: r.from_status || undefined, to: r.to_status, who: r.who || undefined, time: r.created_at,
+});
+
+/* ── Notifications (migration 020) ── */
+export function rowToNotification(r: Row): TaskNotification {
+  return { id: r.id, projectId: r.project_id, kind: r.kind, actor: r.actor || undefined, detail: r.detail || '', time: r.created_at, seen: !!r.seen_at };
+}
+
+/** All unseen notifications plus the latest seen ones, newest first. */
+export async function loadNotifications(): Promise<TaskNotification[]> {
+  const sb = getSupabase()!;
+  const [unseen, seen] = await Promise.all([
+    sb.from('notifications').select('*').is('seen_at', null).order('created_at', { ascending: false }).limit(500),
+    sb.from('notifications').select('*').not('seen_at', 'is', null).order('created_at', { ascending: false }).limit(50),
+  ]);
+  for (const res of [unseen, seen]) if (res.error) throw res.error;
+  return [...(unseen.data || []), ...(seen.data || [])].map(rowToNotification).sort((a, b) => b.time.localeCompare(a.time));
+}
+
+/** Mark some notifications seen, or all of the signed-in member's when `ids` is left out. */
+export async function markNotificationsSeen(ids?: number[]) {
+  const { error } = await getSupabase()!.rpc('mark_notifications_seen', ids ? { ids } : {});
+  if (error) throw error;
 }
 
 /** Firm profile + billing config (migration 006). Missing fields fall back to DEFAULT_FIRM. */

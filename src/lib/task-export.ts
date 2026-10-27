@@ -1,88 +1,128 @@
+import type { Content, TableCell, TDocumentDefinitions } from 'pdfmake/interfaces';
 import { PRIORITIES, STATUSES } from './constants';
-import { escapeHtml as esc, fmtDate, fmtDue, isOD } from './helpers';
+import { fmtDate, fmtDue, isOD } from './helpers';
 import type { FirmSettings, Member, Project, StatusId } from './types';
 
-/* A member's open tasks as a printable page (List / Kanban → Export PDF), opened in a new tab; the user prints it from there. */
+/* A member's open tasks as a PDF (List / Kanban → Export PDF), built in the browser with pdfmake and downloaded. */
 
 /** Statuses that count as work on a member's plate, in board order. */
 export const EXPORTED_STATUSES: StatusId[] = ['intake', 'inprogress', 'backlog', 'review'];
 
-const C = { text: '#0F172A', muted: '#64748B', faint: '#94A3B8', line: '#E2E8F0', panel: '#F8FAFC' };
-const FONT = `'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif`;
-const MONO = `'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace`;
+/** Fonts in public/fonts (Noto Sans: Latin + Cyrillic; Noto Sans Armenian for Armenian text). pdfmake fetches them on first use. */
+export const pdfFonts = (origin: string) => ({
+  Noto: { normal: `${origin}/fonts/NotoSans-Regular.ttf`, bold: `${origin}/fonts/NotoSans-Bold.ttf`, italics: `${origin}/fonts/NotoSans-Regular.ttf`, bolditalics: `${origin}/fonts/NotoSans-Bold.ttf` },
+  NotoArmenian: { normal: `${origin}/fonts/NotoSansArmenian-Regular.ttf`, bold: `${origin}/fonts/NotoSansArmenian-Bold.ttf`, italics: `${origin}/fonts/NotoSansArmenian-Regular.ttf`, bolditalics: `${origin}/fonts/NotoSansArmenian-Bold.ttf` },
+});
 
-/** `tasks` are already filtered to EXPORTED_STATUSES and sorted. `logoUrl` must be absolute (the page opens in a new window). */
-export function tasksHtml(member: Member, tasks: Project[], team: Member[], firm: FirmSettings, logoUrl: string) {
+const C = { text: '#0F172A', muted: '#64748B', faint: '#94A3B8', line: '#E2E8F0', rowLine: '#F1F5F9', panel: '#F8FAFC', overdue: '#DC2626' };
+
+/** A PDF font draws only its own letters, so Armenian runs switch to the Armenian font. */
+const ARMENIAN = /([԰-֏ﬓ-ﬗ]+)/;
+const t = (s: string) => s.split(ARMENIAN).filter(Boolean).map(part => (ARMENIAN.test(part) ? { text: part, font: 'NotoArmenian' } : part));
+
+export function tasksFileName(member: Member) {
+  return `tasks-${member.name.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.pdf`;
+}
+
+/** `tasks` are already filtered to EXPORTED_STATUSES and sorted. `logoUrl` must be absolute (pdfmake fetches images listed in `images`). */
+export function tasksPdf(member: Member, tasks: Project[], team: Member[], firm: FirmSettings, logoUrl: string): TDocumentDefinitions {
   const name = (id: string) => team.find(m => m.id === id)?.name ?? '';
   const asOf = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const th = (label: string, right = false): TableCell =>
+    ({ text: label.toUpperCase(), style: 'th', alignment: right ? 'right' : 'left' });
 
-  const section = (s: (typeof STATUSES)[number]) => {
-    const list = tasks.filter(p => p.status === s.id);
-    if (!list.length) return '';
-    return `
-<h2><span class="dot" style="background:${s.col}"></span>${esc(s.label)}<span class="count">${list.length}</span></h2>
-<table>
-  <colgroup><col style="width:29%"><col style="width:13%"><col style="width:15%"><col style="width:7%"><col style="width:8%"><col style="width:14%"><col style="width:14%"></colgroup>
-  <thead><tr><th>Task</th><th>Client</th><th>Type · Area</th><th>Priority</th><th class="r">Progress</th><th>Team</th><th>Due</th></tr></thead>
-  <tbody>${list.map(p => {
+  const row = (p: Project): TableCell[] => {
     const pr = PRIORITIES.find(x => x.id === p.priority);
     const others = p.assignees.filter(a => a !== member.id).map(name).filter(Boolean);
-    const people = [
-      others.length ? `<div><span class="k">With</span> ${esc(others.join(', '))}</div>` : '',
-      p.supervisor ? `<div><span class="k">Supervisor</span> ${esc(name(p.supervisor))}</div>` : '',
-    ].join('');
-    return `<tr>
-      <td><div class="title">${esc(p.title)}</div>${p.notes.trim() ? `<div class="notes">${esc(p.notes.trim())}</div>` : ''}</td>
-      <td>${esc(p.client)}</td>
-      <td>${esc([p.matterType, p.area].filter(Boolean).join(' · '))}</td>
-      <td>${pr ? `<span style="color:${pr.col};font-weight:700">${esc(pr.label)}</span>` : ''}</td>
-      <td class="r mono">${p.progress}%</td>
-      <td class="small">${people || '<span class="k">—</span>'}</td>
-      <td class="mono">${p.due ? `<span${isOD(p) ? ' class="od"' : ''}>${esc(fmtDue(p))}${isOD(p) ? ' · overdue' : ''}</span>` : '<span class="k">No due date</span>'}<div class="k">Created ${esc(fmtDate(p.created))}</div></td>
-    </tr>`;
-  }).join('')}</tbody>
-</table>`;
+    const people: Content[] = [
+      ...(others.length ? [{ text: [{ text: 'With ', color: C.faint }, ...t(others.join(', '))] }] : []),
+      ...(p.supervisor ? [{ text: [{ text: 'Supervisor ', color: C.faint }, ...t(name(p.supervisor))] }] : []),
+    ];
+    const od = isOD(p);
+    return [
+      { stack: [{ text: t(p.title), bold: true }, ...(p.notes.trim() ? [{ text: t(p.notes.trim()), style: 'notes' }] : [])] },
+      { text: t(p.client) },
+      { text: t([p.matterType, p.area].filter(Boolean).join(' · ')) },
+      pr ? { text: pr.label, bold: true, color: pr.col } : '',
+      { text: `${p.progress}%`, alignment: 'right' },
+      people.length ? { stack: people, fontSize: 8.5 } : { text: '—', color: C.faint },
+      { stack: [
+        p.due ? { text: fmtDue(p) + (od ? ' · overdue' : ''), bold: true, color: od ? C.overdue : C.text } : { text: 'No due date', color: C.faint, fontSize: 8 },
+        { text: `Created ${fmtDate(p.created)}`, color: C.faint, fontSize: 8 },
+      ] },
+    ];
   };
 
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Open tasks — ${esc(member.name)} — ${esc(asOf)}</title>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-<style>
-  @page{size:A4 landscape;margin:12mm}
-  *{box-sizing:border-box}
-  body{margin:0;padding:24px;background:#fff;color:${C.text};font-family:${FONT};font-size:11px;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  @media print{body{padding:0}}
-  .hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;padding:16px 18px;background:${C.panel};border:1px solid ${C.line};border-radius:10px}
-  .brand{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:800;letter-spacing:-0.02em}
-  .brand img{height:32px;width:auto}
-  .meta{text-align:right;color:${C.muted}}
-  .meta .label{font-size:9.5px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${C.faint}}
-  .meta .who{font-size:15px;font-weight:700;color:${C.text};margin:2px 0}
-  h2{display:flex;align-items:center;gap:8px;margin:20px 0 8px;font-size:12.5px;font-weight:700;break-after:avoid}
-  .dot{width:9px;height:9px;border-radius:50%}
-  .count{font-family:${MONO};font-size:10.5px;font-weight:500;color:${C.faint}}
-  table{width:100%;border-collapse:collapse;table-layout:fixed}
-  th{padding:7px 8px;text-align:left;font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${C.faint};background:${C.panel};border-bottom:1px solid ${C.line}}
-  td{padding:8px;vertical-align:top;border-bottom:1px solid #F1F5F9;overflow-wrap:anywhere}
-  tr{break-inside:avoid}
-  .r{text-align:right}
-  .mono{font-family:${MONO};font-size:10.5px}
-  .small{font-size:10.5px}
-  .title{font-weight:700}
-  .notes{margin-top:3px;color:${C.muted};font-size:10.5px;white-space:pre-wrap}
-  .k{color:${C.faint};font-size:10px;font-family:${FONT}}
-  .od{color:#DC2626;font-weight:700}
-  .empty{margin-top:24px;color:${C.muted}}
-</style></head>
-<body>
-  <div class="hdr">
-    <div class="brand"><img src="${esc(logoUrl)}" alt="">${esc(firm.name)}</div>
-    <div class="meta">
-      <div class="label">Open tasks</div>
-      <div class="who">${esc(member.name)}</div>
-      <div>As of ${esc(asOf)} · ${tasks.length} task${tasks.length === 1 ? '' : 's'}</div>
-    </div>
-  </div>
-  ${tasks.length ? STATUSES.filter(s => EXPORTED_STATUSES.includes(s.id)).map(section).join('') : '<div class="empty">No open tasks.</div>'}
-</body></html>`;
+  const sections: Content[] = STATUSES.filter(s => EXPORTED_STATUSES.includes(s.id)).flatMap(s => {
+    const list = tasks.filter(p => p.status === s.id);
+    if (!list.length) return [];
+    return [
+      {
+        columns: [
+          { canvas: [{ type: 'ellipse', x: 4, y: 7, r1: 3.5, r2: 3.5, color: s.col }], width: 12 },
+          { text: [{ text: s.label, bold: true, fontSize: 11 }, { text: `   ${list.length}`, color: C.faint, fontSize: 9 }], width: '*' },
+        ],
+        margin: [0, 16, 0, 6],
+      },
+      {
+        table: {
+          headerRows: 1,
+          dontBreakRows: true,
+          widths: ['29%', '13%', '15%', '7%', '8%', '14%', '14%'],
+          body: [
+            [th('Task'), th('Client'), th('Type · Area'), th('Priority'), th('Progress', true), th('Team'), th('Due')],
+            ...list.map(row),
+          ],
+        },
+        layout: {
+          fillColor: i => (i === 0 ? C.panel : null),
+          hLineWidth: i => (i === 0 ? 0 : 0.6),
+          hLineColor: i => (i === 1 ? C.line : C.rowLine),
+          vLineWidth: () => 0,
+          paddingLeft: () => 6, paddingRight: () => 6, paddingTop: () => 6, paddingBottom: () => 6,
+        },
+      },
+    ];
+  });
+
+  return {
+    pageSize: 'A4',
+    pageOrientation: 'landscape',
+    pageMargins: [34, 34, 34, 40],
+    images: { logo: logoUrl },
+    info: { title: `Open tasks — ${member.name} — ${asOf}`, author: firm.name },
+    defaultStyle: { font: 'Noto', fontSize: 9, lineHeight: 1.2, color: C.text },
+    styles: {
+      th: { fontSize: 7, bold: true, color: C.faint, characterSpacing: 0.6 },
+      notes: { fontSize: 8, color: C.muted, margin: [0, 2, 0, 0] },
+    },
+    footer: (page, pages) => ({
+      columns: [
+        { text: t(`${firm.name} · Open tasks · ${member.name}`), color: C.faint, fontSize: 7.5 },
+        { text: `Page ${page} of ${pages}`, alignment: 'right', color: C.faint, fontSize: 7.5 },
+      ],
+      margin: [34, 12, 34, 0],
+    }),
+    content: [
+      {
+        table: {
+          widths: ['*'],
+          body: [[{
+            columns: [
+              { image: 'logo', fit: [26, 26], width: 26 },
+              { text: t(firm.name), bold: true, fontSize: 14, margin: [8, 4, 0, 0], width: '*' },
+              { stack: [
+                { text: 'OPEN TASKS', fontSize: 7, bold: true, color: C.faint, characterSpacing: 1.2 },
+                { text: t(member.name), fontSize: 13, bold: true, margin: [0, 2, 0, 2] },
+                { text: `As of ${asOf} · ${tasks.length} task${tasks.length === 1 ? '' : 's'}`, color: C.muted },
+              ], alignment: 'right', width: 'auto' },
+            ],
+            margin: [8, 6, 8, 6],
+          }]],
+        },
+        layout: { fillColor: () => C.panel, hLineColor: () => C.line, vLineColor: () => C.line, hLineWidth: () => 0.6, vLineWidth: () => 0.6 },
+      },
+      ...sections,
+    ],
+  };
 }

@@ -7,7 +7,7 @@ import type { Project } from '@/lib/types';
 import { FileRow } from './Attachments';
 import { useStore } from './store';
 import { Photo } from './ui';
-import { ArchiveIcon, CalendarIcon, CircleCheckIcon, CopyIcon, FlagIcon, MessageSquareIcon, PaperclipIcon, SendIcon, GlobeIcon, LinkIcon, LockIcon, PencilIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserCheckIcon, UserPlusIcon, XIcon } from 'lucide-react';
+import { ArchiveIcon, CalendarIcon, CircleCheckIcon, CopyIcon, FlagIcon, HistoryIcon, MessageSquareIcon, PaperclipIcon, SendIcon, GlobeIcon, LinkIcon, LockIcon, PencilIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserCheckIcon, UserPlusIcon, XIcon } from 'lucide-react';
 
 export function DetailPanel() {
   const { projects, selectedPid } = useStore();
@@ -22,7 +22,7 @@ export function DetailPanel() {
 function PanelContent({ p }: { p: Project }) {
   const {
     currentUser, team, emp, closePanel, togglePrivacy, setProgress, setStatus, patchProject,
-    addTimeLog, setAssignees, setSupervisor, renameProject, addActivity, archiveProject, deleteProject, toast,
+    addTimeLog, setAssignees, setSupervisor, renameProject, addActivity, archiveProject, deleteProject, toast, setModal,
     comments, loadTaskComments, postComment, removeComment,
     taskFiles, loadFilesFor, uploadTaskFiles, removeTaskFile,
   } = useStore();
@@ -407,6 +407,7 @@ function PanelContent({ p }: { p: Project }) {
 
         {/* ACTIONS */}
         <div className="dp-section" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button className="dp-action-btn default" onClick={() => setModal({ kind: 'history', pid: p.id })}><HistoryIcon size={14} /> View History</button>
           <button className="dp-action-btn default" onClick={copyLink}><LinkIcon size={14} /> Copy Link</button>
           {p.status !== 'archive' && (
             <button className="dp-action-btn default" onClick={() => archiveProject(p.id)}><ArchiveIcon size={14} /> Archive Task</button>

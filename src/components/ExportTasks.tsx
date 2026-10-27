@@ -3,17 +3,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { LOGO_SRC, STATUSES } from '@/lib/constants';
 import { canSeeMatter } from '@/lib/helpers';
-import { EXPORTED_STATUSES, tasksHtml } from '@/lib/task-export';
+import { EXPORTED_STATUSES, pdfFonts, tasksFileName, tasksPdf } from '@/lib/task-export';
 import { byDate } from './MatterFilters';
 import { useStore } from './store';
 import { Av } from './ui';
-import { FileTextIcon, InfoIcon, TriangleAlertIcon } from 'lucide-react';
+import { FileTextIcon, InfoIcon, LoaderCircleIcon, TriangleAlertIcon } from 'lucide-react';
 
-/** List / Kanban header: a member's open tasks (Intake → Supervisor Review) as a printable page, opened in a new tab.
+/** List / Kanban header: download a member's open tasks (Intake → Supervisor Review) as a PDF.
  *  Members export their own straight away; admins click, then pick the member from a list. */
 export function ExportTasksButton() {
   const { projects, team, currentUser, emp, firm, toast } = useStore();
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
 
   // The member list closes on a click outside it or on Esc.
@@ -35,7 +36,7 @@ export function ExportTasksButton() {
       .sort((a, b) => EXPORTED_STATUSES.indexOf(a.status) - EXPORTED_STATUSES.indexOf(b.status) || byDue(a, b));
   };
 
-  const exportPdf = (who: string) => {
+  const exportPdf = async (who: string) => {
     setOpen(false);
     const member = emp(who);
     const tasks = tasksOf(who);
@@ -44,11 +45,18 @@ export function ExportTasksButton() {
       toast(InfoIcon, 'Nothing to export', `${member.name} has no tasks in ${STATUSES.filter(s => EXPORTED_STATUSES.includes(s.id)).map(s => s.label).join(', ')}.`);
       return;
     }
-    // Opens in a new tab, ready to print — the user prints or saves it as PDF from there (⌘P / Ctrl+P).
-    const w = window.open('', '_blank');
-    if (!w) { toast(TriangleAlertIcon, 'Pop-up blocked', 'Allow pop-ups for this site to export the tasks.'); return; }
-    w.document.write(tasksHtml(member, tasks, team, firm, location.origin + LOGO_SRC));
-    w.document.close();
+    // pdfmake (~1 MB) and the fonts load only when someone exports.
+    setBusy(true);
+    try {
+      const pdfMake = (await import('pdfmake/build/pdfmake')).default;
+      pdfMake.setFonts(pdfFonts(location.origin));
+      await pdfMake.createPdf(tasksPdf(member, tasks, team, firm, location.origin + LOGO_SRC)).download(tasksFileName(member));
+    } catch (e) {
+      console.warn('PDF export failed', e);
+      toast(TriangleAlertIcon, 'Export failed', 'The PDF could not be created. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -56,11 +64,12 @@ export function ExportTasksButton() {
       <button
         className="btn-outline"
         onClick={() => (currentUser.isAdmin ? setOpen(o => !o) : exportPdf(currentUser.id))}
-        title="Opens a printable page of tasks in Intake, In Progress, Client Input / Backlog and Supervisor Review"
+        disabled={busy}
+        title="Download a PDF of tasks in Intake, In Progress, Client Input / Backlog and Supervisor Review"
         aria-haspopup={currentUser.isAdmin ? 'menu' : undefined}
         aria-expanded={currentUser.isAdmin ? open : undefined}
       >
-        <FileTextIcon size={14} /> Export PDF
+        {busy ? <LoaderCircleIcon size={14} className="spin" /> : <FileTextIcon size={14} />} {busy ? 'Exporting…' : 'Export PDF'}
       </button>
       {open && (
         <div className="export-menu" role="menu">

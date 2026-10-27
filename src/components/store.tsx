@@ -3,16 +3,16 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { CHAT_ROOMS, DEFAULT_FIRM } from '@/lib/constants';
 import {
-  addComment, addTaskFile, deleteComment, deleteMessage, deleteTaskFile, loadAll, loadTaskFiles, removeAttachment, rowToTaskFile, uploadAttachment, loadChatUnread, loadRows, loadComments, loadFirmSettings, loadLastLogins, loadMessages, markChatRead, saveFirmSettings, touchLastSeen,
-  rowToActivity, rowToClient, rowToComment, rowToMember, rowToMessage, rowToProject, write, type Mutation,
+  addComment, addTaskFile, deleteComment, deleteMessage, deleteTaskFile, loadAll, loadTaskFiles, removeAttachment, rowToTaskFile, uploadAttachment, loadChatUnread, loadRows, loadComments, loadFirmSettings, loadLastLogins, loadMessages, loadNotifications, markChatRead, markNotificationsSeen, saveFirmSettings, touchLastSeen,
+  rowToActivity, rowToClient, rowToComment, rowToMember, rowToMessage, rowToNotification, rowToProject, write, type Mutation,
 } from '@/lib/db';
 import { sendMatterAssignmentEmail } from '@/lib/email';
 import { checkFile, canDeleteMatter, canEditTitle, canMakePrivate, dmRoom, isAdministrationTask, stat, today } from '@/lib/helpers';
 import { getSupabase } from '@/lib/supabase';
 import type {
-  Activity, ChatMessage, Client, Currency, FirmSettings, Member, Project, StatusId, SyncState, TaskComment, TaskFile, TimeLog,
+  Activity, ChatMessage, Client, Currency, FirmSettings, Member, Project, StatusId, SyncState, TaskComment, TaskFile, TaskNotification, TimeLog,
 } from '@/lib/types';
-import { ArchiveIcon, MessageSquareIcon, PaperclipIcon, GlobeIcon, LockIcon, MailIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
+import { ArchiveIcon, MessageSquareIcon, NotebookPenIcon, PaperclipIcon, GlobeIcon, LockIcon, MailIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /* ── localStorage: theme (always) + a per-user data cache for instant paint, wiped on sign-out ── */
@@ -70,6 +70,13 @@ function subscribeLive(topic: string, apply: (c: LiveChange, row: LiveRow | null
   return () => { closed = true; clearTimeout(timer); sb.removeChannel(channel); };
 }
 
+/** Icon and wording per notification kind ("Vache commented"). */
+export const NOTIFICATION_KINDS: Record<TaskNotification['kind'], [LucideIcon, string]> = {
+  comment: [MessageSquareIcon, 'commented'],
+  file: [PaperclipIcon, 'attached a file'],
+  notes: [NotebookPenIcon, 'updated the notes'],
+};
+
 /** 'loading' until the session is known and (if signed in) the team is loaded.
  *  'noAccess' = signed in to Supabase but not listed in team_members. */
 export type AuthStatus = 'loading' | 'signedOut' | 'noAccess' | 'signedIn';
@@ -79,7 +86,8 @@ export type ModalState =
   | { kind: 'logTime' }
   | { kind: 'client'; id: string | null; onSaved?: (id: string) => void }
   | { kind: 'member'; id: string | null }
-  | { kind: 'supervisor'; pid: string };
+  | { kind: 'supervisor'; pid: string }
+  | { kind: 'history'; pid: string };
 
 export type ConfirmState = { title: string; msg: string; confirmLabel?: string; onConfirm: () => void };
 
@@ -114,6 +122,11 @@ function useStoreValue() {
   const [taskFiles, setTaskFiles] = useState<Record<string, TaskFile[]>>({});
   // Member id → last sign-in time (admins only, migration 011). null until loaded.
   const [lastLogins, setLastLogins] = useState<Record<string, string> | null>(null);
+  // Comments, files and notes changes on my tasks by others (migration 020), newest first. null until loaded.
+  const [notifications, setNotifications] = useState<TaskNotification[] | null>(null);
+  // Why notifications couldn't be loaded (shown on the Notifications page with a Retry button), or null.
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
+  const loadNotificationsRef = useRef<() => void>(() => {});
 
   const currentUser = (sessionEmail && team.find(e => e.email.toLowerCase() === sessionEmail)) || null;
   const currentUserId = currentUser?.id ?? null;
@@ -384,6 +397,50 @@ function useStoreValue() {
     document.addEventListener('visibilitychange', onVisible);
     return () => { unsubscribe(); document.removeEventListener('visibilitychange', onVisible); };
   }, [currentUserId, refreshChatUnread]);
+
+  // Notifications (migration 020): loaded on sign-in, then kept live on this member's own channel.
+  useEffect(() => {
+    if (!getSupabase() || !currentUserId) { setNotifications(null); setNotificationsError(null); return; }
+    let live = true;
+    const load = () => loadNotifications()
+      .then(list => { if (live) { setNotifications(list); setNotificationsError(null); } })
+      .catch(e => {
+        console.warn('Notifications unavailable (has migration 020 been run?)', e);
+        if (live) setNotificationsError((e as { message?: string })?.message || 'Unknown error');
+      });
+    loadNotificationsRef.current = () => { setNotificationsError(null); load(); };
+    load();
+    let connectedOnce = false;
+    const unsubscribe = subscribeLive(`live:member:${currentUserId}`, (c, row) => {
+      if (c.table !== 'notifications' || !row) return;
+      const n = rowToNotification(row);
+      setNotifications(list => [n, ...(list || []).filter(x => x.id !== n.id)].sort((a, b) => b.time.localeCompare(a.time)));
+      if (c.op !== 'INSERT') return;
+      const { projects: ps, team: t } = state.current;
+      const title = ps.find(p => p.id === n.projectId)?.title ?? 'a task';
+      const who = t.find(m => m.id === n.actor)?.name.split(' ')[0] ?? 'Someone';
+      const [icon, what] = NOTIFICATION_KINDS[n.kind];
+      toast(icon, `${who} ${what}`, title);
+    }, () => {
+      // After a dropped connection, catch up on anything missed.
+      if (connectedOnce) load();
+      connectedOnce = true;
+    });
+    return () => { live = false; unsubscribe(); };
+  }, [currentUserId, toast]);
+
+  /** Mark notifications seen (all of them when `ids` is left out). Shown as seen right away. */
+  const markSeen = useCallback((ids?: number[]) => {
+    if (ids && !ids.length) return;
+    setNotifications(list => list && list.map(n => (!ids || ids.includes(n.id) ? { ...n, seen: true } : n)));
+    markNotificationsSeen(ids).catch(e => console.warn('Could not mark notifications seen', e));
+  }, []);
+
+  // Opening a task counts as seeing what happened on it.
+  useEffect(() => {
+    if (!selectedPid || !notifications) return;
+    markSeen(notifications.filter(n => !n.seen && n.projectId === selectedPid).map(n => n.id));
+  }, [selectedPid, notifications, markSeen]);
 
   // Last seen (migration 019): a saved session never signs in again, so record use of the app while it's open —
   // at most once an hour per tab, however often the tab is switched back to.
@@ -834,6 +891,7 @@ function useStoreValue() {
   ] : [];
   const chatUnread = chatRoomIds.reduce((n, id) => n + (chatUnreadByRoom[id] || 0), 0);
   const openPanel = (id: string) => setSelectedPid(cur => (cur === id ? null : id));
+  const unseenNotifications = (notifications || []).filter(n => !n.seen).length;
   const clearSavedState = () => {
     localStorage.removeItem(CACHE_KEY);
     toast(Trash2Icon, 'Cache cleared', 'Reloading from the database…');
@@ -851,6 +909,7 @@ function useStoreValue() {
     saveClient, deleteClient, saveMember, deleteMember,
     loadRoom, sendMessage, setActiveChatRoom, clearSavedState,
     comments, loadTaskComments, postComment, removeComment, lastLogins, refreshLastLogins,
+    notifications, notificationsError, retryNotifications: () => loadNotificationsRef.current(), unseenNotifications, markSeen,
     taskFiles, loadFilesFor, uploadTaskFiles, removeTaskFile, sendChatFile, deleteChatMessage,
   };
 }

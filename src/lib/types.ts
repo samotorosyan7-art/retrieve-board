@@ -68,6 +68,19 @@ export interface StatusChange {
   time: string;
 }
 
+/** Something someone else did on a task assigned to you (migration 020). */
+export interface TaskNotification {
+  id: number;
+  projectId: string;
+  kind: 'comment' | 'file' | 'notes';
+  /** Member who did it. */
+  actor?: string;
+  /** Comment text, file name or the notes (shortened). */
+  detail: string;
+  time: string;
+  seen: boolean;
+}
+
 export interface Client {
   id: string;
   name: string;

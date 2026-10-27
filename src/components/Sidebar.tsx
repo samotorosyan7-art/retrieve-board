@@ -6,13 +6,13 @@ import { LOGO_SRC } from '@/lib/constants';
 import { isOpen } from '@/lib/helpers';
 import { useNav } from './nav';
 import { useStore } from './store';
-import { Building2Icon, CalendarIcon, ClipboardCheckIcon, KeyRoundIcon, LayoutDashboardIcon, ListChecksIcon, ListIcon, LogOutIcon, MessagesSquareIcon, MoonIcon, ReceiptIcon, SendIcon, SettingsIcon, SquareKanbanIcon, SunIcon, TimerIcon, UsersIcon } from 'lucide-react';
+import { BellIcon, Building2Icon, CalendarIcon, ClipboardCheckIcon, KeyRoundIcon, LayoutDashboardIcon, ListChecksIcon, ListIcon, LogOutIcon, MessagesSquareIcon, MoonIcon, ReceiptIcon, SendIcon, SettingsIcon, SquareKanbanIcon, SunIcon, TimerIcon, UsersIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 type NavItem = { id: string; icon: LucideIcon; label: string; badge?: number; badgeStyle?: React.CSSProperties };
 
 export function Sidebar() {
-  const { currentUser, projects, chatUnread, search, setSearch, isDark, toggleTheme, logout } = useStore();
+  const { currentUser, projects, chatUnread, unseenNotifications, search, setSearch, isDark, toggleTheme, logout } = useStore();
   const { page, go } = useNav();
   const router = useRouter();
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -47,6 +47,7 @@ export function Sidebar() {
         <div className="sb-section">Overview</div>
         {link({ id: 'dashboard', icon: LayoutDashboardIcon, label: 'Dashboard' })}
         {link(myTasks)}
+        {link({ id: 'notifications', icon: BellIcon, label: 'Notifications', badge: unseenNotifications })}
         <div className="sb-section">Tasks</div>
         {link({ id: 'kanban', icon: SquareKanbanIcon, label: 'Kanban Board' })}
         {link({ id: 'list', icon: ListIcon, label: 'All Tasks' })}
