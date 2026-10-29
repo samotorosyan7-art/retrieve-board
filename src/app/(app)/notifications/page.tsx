@@ -6,8 +6,8 @@ import { Av, PageHeader } from '@/components/ui';
 import { fmtAgo } from '@/lib/helpers';
 import { CheckCheckIcon, CheckIcon, RotateCwIcon } from 'lucide-react';
 
-/** Comments, files and notes changes on tasks assigned to me (migration 020). Opening one — here or from anywhere
- *  else — marks it seen; the sidebar badge counts the unseen ones. */
+/** Comments, files and notes changes on tasks assigned to me (migration 020), and comments mentioning me (021).
+ *  Opening one — here or from anywhere else — marks it seen; the sidebar badge counts the unseen ones. */
 export default function NotificationsPage() {
   const { notifications, notificationsError, retryNotifications, unseenNotifications, markSeen, projects, emp, setSelectedPid, selectedPid } = useStore();
   const [onlyUnseen, setOnlyUnseen] = useState(false);
@@ -18,7 +18,7 @@ export default function NotificationsPage() {
     <div className="page active" id="page-notifications">
       <PageHeader
         title="My" light="Notifications"
-        sub={notifications ? `${unseenNotifications} unseen · new comments, files and notes on tasks assigned to you` : notificationsError ? 'Not loaded' : 'Loading…'}
+        sub={notifications ? `${unseenNotifications} unseen · mentions, and new comments, files and notes on tasks assigned to you` : notificationsError ? 'Not loaded' : 'Loading…'}
       >
         <div className="seg-ctrl">
           <button className={`seg-btn${!onlyUnseen ? ' active' : ''}`} onClick={() => setOnlyUnseen(false)}>All</button>
@@ -36,7 +36,7 @@ export default function NotificationsPage() {
         ) : !notifications ? (
           <div className="notif-empty">Loading…</div>
         ) : shown.length === 0 ? (
-          <div className="notif-empty">{onlyUnseen ? 'You’re all caught up.' : 'No notifications yet. You’ll see new comments, files and notes on your tasks here.'}</div>
+          <div className="notif-empty">{onlyUnseen ? 'You’re all caught up.' : 'No notifications yet. You’ll see mentions, and new comments, files and notes on your tasks, here.'}</div>
         ) : shown.map(n => {
           const p = projects.find(x => x.id === n.projectId);
           const e = emp(n.actor ?? '');

@@ -12,7 +12,7 @@ import { getSupabase } from '@/lib/supabase';
 import type {
   Activity, ChatMessage, Client, Currency, FirmSettings, Member, Project, StatusId, SyncState, TaskComment, TaskFile, TaskNotification, TimeLog,
 } from '@/lib/types';
-import { ArchiveIcon, MessageSquareIcon, NotebookPenIcon, PaperclipIcon, GlobeIcon, LockIcon, MailIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
+import { ArchiveIcon, AtSignIcon, MessageSquareIcon, NotebookPenIcon, PaperclipIcon, GlobeIcon, LockIcon, MailIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /* ── localStorage: theme (always) + a per-user data cache for instant paint, wiped on sign-out ── */
@@ -75,6 +75,7 @@ export const NOTIFICATION_KINDS: Record<TaskNotification['kind'], [LucideIcon, s
   comment: [MessageSquareIcon, 'commented'],
   file: [PaperclipIcon, 'attached a file'],
   notes: [NotebookPenIcon, 'updated the notes'],
+  mention: [AtSignIcon, 'mentioned you'],
 };
 
 /** 'loading' until the session is known and (if signed in) the team is loaded.
@@ -721,13 +722,13 @@ function useStoreValue() {
       setComments(all => ({ ...all, [pid]: list }));
     } catch (e) { console.warn('Comments unavailable (has migration 011 been run?)', e); }
   }, []);
-  /** Returns whether it saved. */
-  const postComment = async (pid: string, text: string) => {
+  /** Returns whether it saved. `mentions`: member ids the comment @mentions (they're notified, migration 021). */
+  const postComment = async (pid: string, text: string, mentions: string[] = []) => {
     const who = me();
     const p = state.current.projects.find(x => x.id === pid);
     if (!who || !p || !text.trim()) return false;
     try {
-      const c = await addComment(pid, who, text.trim());
+      const c = await addComment(pid, who, text.trim(), mentions);
       setComments(all => ({ ...all, [pid]: (all[pid] || []).some(x => x.id === c.id) ? all[pid] : [...(all[pid] || []), c] }));
       addActivity(who, `commented on <b>${p.title}</b>`, [p]);
       return true;

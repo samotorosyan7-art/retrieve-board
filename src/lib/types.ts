@@ -68,11 +68,11 @@ export interface StatusChange {
   time: string;
 }
 
-/** Something someone else did on a task assigned to you (migration 020). */
+/** Something someone else did on a task assigned to you (migration 020), or a comment mentioning you (021). */
 export interface TaskNotification {
   id: number;
   projectId: string;
-  kind: 'comment' | 'file' | 'notes';
+  kind: 'comment' | 'file' | 'notes' | 'mention';
   /** Member who did it. */
   actor?: string;
   /** Comment text, file name or the notes (shortened). */
@@ -106,6 +106,8 @@ export interface TaskComment {
   projectId: string;
   who: string;
   text: string;
+  /** Members the comment @mentions (migration 021); they're notified. */
+  mentions: string[];
   time: string;
 }
 

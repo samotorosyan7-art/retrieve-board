@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { FILE_ACCEPT, MATTER_TYPES, MAX_FILE_BYTES, PRIORITIES, STATUSES } from '@/lib/constants';
-import { canDeleteMatter, canEditTitle, canMakePrivate, fmtAgo, fmtBytes, fmtDate, fmtDue, isOD, pri, progColor, stat, today } from '@/lib/helpers';
-import type { Project } from '@/lib/types';
+import { canDeleteMatter, canEditTitle, canMakePrivate, canSeeMatter, fmtAgo, fmtBytes, fmtDate, fmtDue, isOD, pri, progColor, splitMentions, stat, today } from '@/lib/helpers';
+import type { Member, Project } from '@/lib/types';
 import { FileRow } from './Attachments';
 import { useStore } from './store';
-import { Photo } from './ui';
+import { Av, Photo } from './ui';
 import { ArchiveIcon, CalendarIcon, CircleCheckIcon, CopyIcon, FlagIcon, HistoryIcon, MessageSquareIcon, PaperclipIcon, SendIcon, GlobeIcon, LinkIcon, LockIcon, PencilIcon, SaveIcon, TagIcon, TimerIcon, Trash2Icon, TriangleAlertIcon, UserCheckIcon, UserPlusIcon, XIcon } from 'lucide-react';
 
 export function DetailPanel() {
@@ -23,7 +23,7 @@ function PanelContent({ p }: { p: Project }) {
   const {
     currentUser, team, emp, closePanel, togglePrivacy, setProgress, setStatus, patchProject,
     addTimeLog, setAssignees, setSupervisor, renameProject, addActivity, archiveProject, deleteProject, toast, setModal,
-    comments, loadTaskComments, postComment, removeComment,
+    comments, loadTaskComments, removeComment,
     taskFiles, loadFilesFor, uploadTaskFiles, removeTaskFile,
   } = useStore();
   const st = stat(p.status), pr = pri(p.priority), od = isOD(p);
@@ -42,8 +42,6 @@ function PanelContent({ p }: { p: Project }) {
   const [tfWho, setTfWho] = useState(currentUser?.id || '');
   const [tfBillable, setTfBillable] = useState(true);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
-  const [commentDraft, setCommentDraft] = useState('');
-  const [posting, setPosting] = useState(false);
   const taskComments = comments[p.id] || [];
 
   useEffect(() => { loadTaskComments(p.id); }, [p.id, loadTaskComments]);
@@ -58,13 +56,6 @@ function PanelContent({ p }: { p: Project }) {
     await uploadTaskFiles(p.id, [...list], (done, total) => setUpload(total ? { done, total } : null));
     setUpload(null);
     if (fileInput.current) fileInput.current.value = '';
-  }
-
-  async function submitComment() {
-    if (!commentDraft.trim() || posting) return;
-    setPosting(true);
-    if (await postComment(p.id, commentDraft)) setCommentDraft('');
-    setPosting(false);
   }
 
   function saveTitle() {
@@ -362,22 +353,16 @@ function PanelContent({ p }: { p: Project }) {
                       </button>
                     )}
                   </div>
-                  <div className="feed-text" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{c.text}</div>
+                  <div className="feed-text" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                    {splitMentions(c.text, team.filter(m => c.mentions.includes(m.id))).map((part, i) => (
+                      <Fragment key={i}>{typeof part === 'string' ? part : <span className="mention">@{part.name}</span>}</Fragment>
+                    ))}
+                  </div>
                 </div>
               </div>
             );
           })}
-          <textarea
-            className="input" rows={2} placeholder="Write a comment… (⌘/Ctrl + Enter to post)"
-            style={{ resize: 'vertical', fontSize: 12.5, lineHeight: 1.6, marginTop: 8 }}
-            value={commentDraft} onChange={e => setCommentDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submitComment(); } }}
-          />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-            <button className="btn-solid" style={{ fontSize: 12, padding: '6px 12px' }} disabled={!commentDraft.trim() || posting} onClick={submitComment}>
-              {posting ? <MessageSquareIcon size={12} /> : <SendIcon size={12} />} Add comment
-            </button>
-          </div>
+          <CommentBox p={p} />
         </div>
 
         {/* FILES */}
@@ -425,3 +410,92 @@ const dueInput: React.CSSProperties = {
   background: 'transparent', border: 'none', outline: 'none', fontSize: 13, fontWeight: 600,
   fontFamily: 'var(--font-sans)', width: '100%', cursor: 'pointer', display: 'block',
 };
+
+/** Typing "@" lists the members who can see the task; picking one inserts "@Full Name". Every "@Full Name" still in
+ *  the text when it's posted is sent as a mention, and those members are notified (migration 021). */
+function CommentBox({ p }: { p: Project }) {
+  const { currentUser, team, postComment } = useStore();
+  const [draft, setDraft] = useState('');
+  const [posting, setPosting] = useState(false);
+  // The "@…" being typed: where its "@" is and the text after it. null when the list is closed.
+  const [query, setQuery] = useState<{ start: number; text: string } | null>(null);
+  const [active, setActive] = useState(0);
+  const box = useRef<HTMLTextAreaElement>(null);
+
+  const candidates = team.filter(m => m.id !== currentUser?.id && canSeeMatter(p, m, team));
+  const q = query?.text.toLowerCase() ?? '';
+  const matches = query
+    ? candidates.filter(m => m.name.toLowerCase().startsWith(q) || m.name.toLowerCase().split(/\s+/).some(w => w.startsWith(q))).slice(0, 6)
+    : [];
+
+  /** Opens the list while the caret is right after "@…" (at the start or after a space), closes it otherwise. */
+  function track(el: HTMLTextAreaElement) {
+    const caret = el.selectionStart;
+    const m = el.selectionEnd === caret ? /(?:^|\s)@([^@\n]{0,30})$/.exec(el.value.slice(0, caret)) : null;
+    const next = m ? { start: caret - m[1].length - 1, text: m[1] } : null;
+    if (next?.start !== query?.start || next?.text !== query?.text) { setQuery(next); setActive(0); }
+  }
+
+  function pick(m: Member) {
+    const el = box.current;
+    if (!el || !query) return;
+    const end = query.start + 1 + query.text.length;
+    setDraft(draft.slice(0, query.start) + `@${m.name} ` + draft.slice(end));
+    setQuery(null);
+    const caret = query.start + m.name.length + 2;
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(caret, caret); });
+  }
+
+  async function submit() {
+    if (!draft.trim() || posting) return;
+    const mentions = [...new Set(splitMentions(draft, candidates).flatMap(x => (typeof x === 'string' ? [] : [x.id])))];
+    setPosting(true);
+    if (await postComment(p.id, draft, mentions)) { setDraft(''); setQuery(null); }
+    setPosting(false);
+  }
+
+  return (
+    <>
+      <div className="mention-wrap">
+        <textarea
+          ref={box} className="input" rows={2} placeholder="Write a comment… @ to mention someone (⌘/Ctrl + Enter to post)"
+          style={{ resize: 'vertical', fontSize: 12.5, lineHeight: 1.6, marginTop: 8 }}
+          value={draft}
+          onChange={e => { setDraft(e.target.value); track(e.target); }}
+          onSelect={e => track(e.currentTarget)}
+          onBlur={() => setQuery(null)}
+          onKeyDown={e => {
+            if (matches.length) {
+              if (e.key === 'ArrowDown') { e.preventDefault(); setActive((active + 1) % matches.length); return; }
+              if (e.key === 'ArrowUp') { e.preventDefault(); setActive((active - 1 + matches.length) % matches.length); return; }
+              if ((e.key === 'Enter' && !e.metaKey && !e.ctrlKey) || e.key === 'Tab') { e.preventDefault(); pick(matches[active]); return; }
+              if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setQuery(null); return; }
+            }
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); }
+          }}
+        />
+        {matches.length > 0 && (
+          <div className="mention-list" role="listbox">
+            {matches.map((m, i) => (
+              <div
+                key={m.id} role="option" aria-selected={i === active}
+                className={`mention-opt${i === active ? ' active' : ''}`}
+                onMouseDown={e => { e.preventDefault(); pick(m); }}
+                onMouseEnter={() => setActive(i)}
+              >
+                <Av e={m} size={20} />
+                <span className="mention-name">{m.name}</span>
+                <span className="mention-role">{m.role}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+        <button className="btn-solid" style={{ fontSize: 12, padding: '6px 12px' }} disabled={!draft.trim() || posting} onClick={submit}>
+          {posting ? <MessageSquareIcon size={12} /> : <SendIcon size={12} />} Add comment
+        </button>
+      </div>
+    </>
+  );
+}

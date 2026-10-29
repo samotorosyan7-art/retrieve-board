@@ -87,7 +87,7 @@ export function rowToMessage(r: Row): ChatMessage {
     ...(r.attachment ? { attachment: r.attachment } : {}), ...(r.deleted_at ? { deleted: true } : {}) };
 }
 export function rowToComment(r: Row): TaskComment {
-  return { id: r.id, projectId: r.project_id, who: r.who, text: r.text, time: r.created_at };
+  return { id: r.id, projectId: r.project_id, who: r.who, text: r.text, mentions: r.mentions || [], time: r.created_at };
 }
 
 export function rowToTaskFile(r: Row): TaskFile {
@@ -230,9 +230,10 @@ export async function loadComments(projectId: string) {
   return (data || []).map(rowToComment);
 }
 
-export async function addComment(projectId: string, who: string, text: string) {
+/** `mentions` is only sent when there are some, so plain comments still post before migration 021 is run. */
+export async function addComment(projectId: string, who: string, text: string, mentions: string[] = []) {
   const { data, error } = await getSupabase()!
-    .from('task_comments').insert({ project_id: projectId, who, text }).select('*').single();
+    .from('task_comments').insert({ project_id: projectId, who, text, ...(mentions.length ? { mentions } : {}) }).select('*').single();
   if (error) throw error;
   return rowToComment(data);
 }

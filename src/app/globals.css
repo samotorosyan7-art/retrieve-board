@@ -2759,3 +2759,12 @@ input[type=date]:disabled,input[type=time]:disabled{cursor:not-allowed}
 .notif-seen:hover{color:var(--text-primary);border-color:var(--border-strong)}
 .notif-empty{padding:32px;text-align:center;font-size:12.5px;color:var(--text-tertiary)}
 .notif-error{font-family:var(--font-mono);font-size:11.5px;color:var(--p-high)}
+
+/* @mentions in task comments: the member list shown while typing "@…", and mentions in posted comments */
+.mention-wrap{position:relative}
+.mention-list{position:absolute;left:0;right:0;top:100%;margin-top:4px;z-index:20;padding:4px;background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--r-md);box-shadow:var(--shadow-md)}
+.mention-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--r-sm);cursor:pointer;font-size:12.5px}
+.mention-opt.active{background:var(--bg-hover)}
+.mention-name{color:var(--text-primary);font-weight:500;white-space:nowrap}
+.mention-role{margin-left:auto;font-size:11px;color:var(--text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mention{color:var(--s-intake, #7C6FF7);font-weight:600}

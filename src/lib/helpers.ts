@@ -108,6 +108,26 @@ export function canSeeMatter(p: Project, user: Member | null, team: Member[]) {
   return user.isAdministration ? mine : !isAdministrationTask(p, team);
 }
 
+/** Splits comment text into plain text and "@Full Name" mentions of these members. An "@" counts only at the start
+ *  or after whitespace, and the longest matching name wins ("@Ann Smith" is Ann Smith, not Ann). */
+export function splitMentions(text: string, members: Member[]): (string | Member)[] {
+  const byLength = [...members].sort((a, b) => b.name.length - a.name.length);
+  const out: (string | Member)[] = [];
+  let plain = '';
+  for (let i = 0; i < text.length; i++) {
+    const m = text[i] === '@' && (i === 0 || /\s/.test(text[i - 1]))
+      ? byLength.find(x => text.startsWith(x.name, i + 1) && !/[\p{L}\p{N}]/u.test(text[i + 1 + x.name.length] ?? ''))
+      : undefined;
+    if (!m) { plain += text[i]; continue; }
+    if (plain) out.push(plain);
+    out.push(m);
+    plain = '';
+    i += m.name.length;
+  }
+  if (plain) out.push(plain);
+  return out;
+}
+
 /** Admins delete any task; members only tasks they created (matches migration 004). */
 export const canDeleteMatter = (p: Project, user: Member | null) =>
   !!user && (user.isAdmin || (!!p.createdBy && p.createdBy === user.id));
