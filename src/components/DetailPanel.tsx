@@ -438,10 +438,14 @@ function MentionTextarea({ value, onChange, candidates, onSubmit, rows, placehol
   const [query, setQuery] = useState<{ start: number; text: string } | null>(null);
   const [active, setActive] = useState(0);
   const box = useRef<HTMLTextAreaElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+
+  // Keep the highlighted member in view when moving through a list longer than it shows.
+  useEffect(() => { list.current?.children[active]?.scrollIntoView({ block: 'nearest' }); }, [active, query]);
 
   const q = query?.text.toLowerCase() ?? '';
   const matches = query
-    ? candidates.filter(m => m.name.toLowerCase().startsWith(q) || m.name.toLowerCase().split(/\s+/).some(w => w.startsWith(q))).slice(0, 6)
+    ? candidates.filter(m => m.name.toLowerCase().startsWith(q) || m.name.toLowerCase().split(/\s+/).some(w => w.startsWith(q)))
     : [];
 
   /** Opens the list while the caret is right after "@…" (at the start or after a space), closes it otherwise. */
@@ -482,7 +486,7 @@ function MentionTextarea({ value, onChange, candidates, onSubmit, rows, placehol
         }}
       />
       {matches.length > 0 && (
-        <div className="mention-list" role="listbox">
+        <div ref={list} className="mention-list" role="listbox">
           {matches.map((m, i) => (
             <div
               key={m.id} role="option" aria-selected={i === active}
