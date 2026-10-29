@@ -6,9 +6,9 @@ import type { Activity, Attachment, ChatMessage, Client, FirmSettings, Member, P
 /* ── Row converters (DB snake_case ↔ app camelCase) ── */
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-/* Optional columns — added by supabase/migrations/001_matter_fields.sql (supervisor: 007, due_time: 011). Until that migration runs we
-   detect their absence on load and simply don't send them (the values stay in the local cache). */
-const OPTIONAL_PROJECT_COLS = ['matter_type', 'is_private', 'created_by', 'supervisor', 'due_time'] as const;
+/* Optional columns — added by supabase/migrations/001_matter_fields.sql (supervisor: 007, due_time: 011, notes_mentions: 022). Until that
+   migration runs we detect their absence on load and simply don't send them (the values stay in the local cache). */
+const OPTIONAL_PROJECT_COLS = ['matter_type', 'is_private', 'created_by', 'supervisor', 'due_time', 'notes_mentions'] as const;
 const projectCols = new Set<string>();
 /* team_members.is_administration (migration 016) — not sent until the column exists. */
 let hasAdministrationCol = false;
@@ -20,6 +20,7 @@ export function projectToRow(p: Project) {
   if (projectCols.has('created_by')) optional.created_by = p.createdBy || null;
   if (projectCols.has('supervisor')) optional.supervisor = p.supervisor || null;
   if (projectCols.has('due_time')) optional.due_time = (p.due && p.dueTime) || null;
+  if (projectCols.has('notes_mentions')) optional.notes_mentions = p.notesMentions || [];
   return {
     ...optional,
     id: p.id, title: p.title, client: p.client, area: p.area,
@@ -42,6 +43,7 @@ export function rowToProject(r: Row): Project {
     ...('created_by' in r ? { createdBy: r.created_by || undefined } : {}),
     ...('supervisor' in r ? { supervisor: r.supervisor || undefined } : {}),
     ...('due_time' in r ? { dueTime: r.due_time || undefined } : {}),
+    ...('notes_mentions' in r ? { notesMentions: r.notes_mentions || [] } : {}),
     ...('status_changed_at' in r ? { statusChangedAt: r.status_changed_at || undefined } : {}),
   };
 }

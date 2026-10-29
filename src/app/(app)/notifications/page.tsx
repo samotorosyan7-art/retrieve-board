@@ -6,7 +6,7 @@ import { Av, PageHeader } from '@/components/ui';
 import { fmtAgo } from '@/lib/helpers';
 import { CheckCheckIcon, CheckIcon, RotateCwIcon } from 'lucide-react';
 
-/** Comments, files and notes changes on tasks assigned to me (migration 020), and comments mentioning me (021).
+/** Comments, files and notes changes on tasks assigned to me (migration 020), and comments (021) or notes (022) mentioning me.
  *  Opening one — here or from anywhere else — marks it seen; the sidebar badge counts the unseen ones. */
 export default function NotificationsPage() {
   const { notifications, notificationsError, retryNotifications, unseenNotifications, markSeen, projects, emp, setSelectedPid, selectedPid } = useStore();

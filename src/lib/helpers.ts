@@ -108,7 +108,7 @@ export function canSeeMatter(p: Project, user: Member | null, team: Member[]) {
   return user.isAdministration ? mine : !isAdministrationTask(p, team);
 }
 
-/** Splits comment text into plain text and "@Full Name" mentions of these members. An "@" counts only at the start
+/** Splits comment or notes text into plain text and "@Full Name" mentions of these members. An "@" counts only at the start
  *  or after whitespace, and the longest matching name wins ("@Ann Smith" is Ann Smith, not Ann). */
 export function splitMentions(text: string, members: Member[]): (string | Member)[] {
   const byLength = [...members].sort((a, b) => b.name.length - a.name.length);

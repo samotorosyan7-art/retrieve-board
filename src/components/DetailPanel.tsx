@@ -58,6 +58,13 @@ function PanelContent({ p }: { p: Project }) {
     if (fileInput.current) fileInput.current.value = '';
   }
 
+  /** Members newly @mentioned in the notes are notified (migration 022); saving again doesn't re-notify the others. */
+  function saveNotes() {
+    const text = notes.trim();
+    patchProject(p.id, { notes: text, notesMentions: mentionIds(text, mentionable(p, currentUser, team)) });
+    toast(SaveIcon, 'Notes saved', 'Task notes updated.');
+  }
+
   function saveTitle() {
     const title = (titleDraft ?? '').trim();
     setTitleDraft(null);
@@ -325,12 +332,15 @@ function PanelContent({ p }: { p: Project }) {
             <div className="dp-section-label" style={{ marginBottom: 0 }}>Notes</div>
             <button
               className="btn-ghost" style={{ fontSize: 10.5, padding: '3px 9px' }}
-              onClick={() => { patchProject(p.id, { notes: notes.trim() }); toast(SaveIcon, 'Notes saved', 'Task notes updated.'); }}
+              onClick={saveNotes}
             >
               Save
             </button>
           </div>
-          <textarea className="input" rows={3} style={{ resize: 'vertical', fontSize: 12.5, lineHeight: 1.6 }} value={notes} onChange={e => setNotes(e.target.value)} />
+          <MentionTextarea
+            value={notes} onChange={setNotes} candidates={mentionable(p, currentUser, team)} onSubmit={saveNotes} rows={3}
+            placeholder="Add notes… @ to mention someone (⌘/Ctrl + Enter to save)"
+          />
         </div>
 
         {/* COMMENTS */}
@@ -411,18 +421,24 @@ const dueInput: React.CSSProperties = {
   fontFamily: 'var(--font-sans)', width: '100%', cursor: 'pointer', display: 'block',
 };
 
-/** Typing "@" lists the members who can see the task; picking one inserts "@Full Name". Every "@Full Name" still in
- *  the text when it's posted is sent as a mention, and those members are notified (migration 021). */
-function CommentBox({ p }: { p: Project }) {
-  const { currentUser, team, postComment } = useStore();
-  const [draft, setDraft] = useState('');
-  const [posting, setPosting] = useState(false);
+/** Members who can be @mentioned on a task: everyone who can see it (same rules as can_see_task), except me. */
+const mentionable = (p: Project, me: Member | null, team: Member[]) =>
+  team.filter(m => m.id !== me?.id && canSeeMatter(p, m, team));
+
+/** Ids of the members whose "@Full Name" is in the text. */
+const mentionIds = (text: string, members: Member[]) =>
+  [...new Set(splitMentions(text, members).flatMap(x => (typeof x === 'string' ? [] : [x.id])))];
+
+/** A textarea where typing "@" lists `candidates`; picking one inserts "@Full Name". ⌘/Ctrl + Enter calls onSubmit. */
+function MentionTextarea({ value, onChange, candidates, onSubmit, rows, placeholder, style }: {
+  value: string; onChange: (value: string) => void; candidates: Member[]; onSubmit: () => void;
+  rows: number; placeholder: string; style?: React.CSSProperties;
+}) {
   // The "@…" being typed: where its "@" is and the text after it. null when the list is closed.
   const [query, setQuery] = useState<{ start: number; text: string } | null>(null);
   const [active, setActive] = useState(0);
   const box = useRef<HTMLTextAreaElement>(null);
 
-  const candidates = team.filter(m => m.id !== currentUser?.id && canSeeMatter(p, m, team));
   const q = query?.text.toLowerCase() ?? '';
   const matches = query
     ? candidates.filter(m => m.name.toLowerCase().startsWith(q) || m.name.toLowerCase().split(/\s+/).some(w => w.startsWith(q))).slice(0, 6)
@@ -440,57 +456,71 @@ function CommentBox({ p }: { p: Project }) {
     const el = box.current;
     if (!el || !query) return;
     const end = query.start + 1 + query.text.length;
-    setDraft(draft.slice(0, query.start) + `@${m.name} ` + draft.slice(end));
+    onChange(value.slice(0, query.start) + `@${m.name} ` + value.slice(end));
     setQuery(null);
     const caret = query.start + m.name.length + 2;
     requestAnimationFrame(() => { el.focus(); el.setSelectionRange(caret, caret); });
   }
 
+  return (
+    <div className="mention-wrap">
+      <textarea
+        ref={box} className="input" rows={rows} placeholder={placeholder}
+        style={{ resize: 'vertical', fontSize: 12.5, lineHeight: 1.6, ...style }}
+        value={value}
+        onChange={e => { onChange(e.target.value); track(e.target); }}
+        onSelect={e => track(e.currentTarget)}
+        onBlur={() => setQuery(null)}
+        onKeyDown={e => {
+          if (matches.length) {
+            if (e.key === 'ArrowDown') { e.preventDefault(); setActive((active + 1) % matches.length); return; }
+            if (e.key === 'ArrowUp') { e.preventDefault(); setActive((active - 1 + matches.length) % matches.length); return; }
+            if ((e.key === 'Enter' && !e.metaKey && !e.ctrlKey) || e.key === 'Tab') { e.preventDefault(); pick(matches[active]); return; }
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setQuery(null); return; }
+          }
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); setQuery(null); onSubmit(); }
+        }}
+      />
+      {matches.length > 0 && (
+        <div className="mention-list" role="listbox">
+          {matches.map((m, i) => (
+            <div
+              key={m.id} role="option" aria-selected={i === active}
+              className={`mention-opt${i === active ? ' active' : ''}`}
+              onMouseDown={e => { e.preventDefault(); pick(m); }}
+              onMouseEnter={() => setActive(i)}
+            >
+              <Av e={m} size={20} />
+              <span className="mention-name">{m.name}</span>
+              <span className="mention-role">{m.role}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Every "@Full Name" still in the text when it's posted is sent as a mention, and those members are notified (migration 021). */
+function CommentBox({ p }: { p: Project }) {
+  const { currentUser, team, postComment } = useStore();
+  const [draft, setDraft] = useState('');
+  const [posting, setPosting] = useState(false);
+  const candidates = mentionable(p, currentUser, team);
+
   async function submit() {
     if (!draft.trim() || posting) return;
-    const mentions = [...new Set(splitMentions(draft, candidates).flatMap(x => (typeof x === 'string' ? [] : [x.id])))];
     setPosting(true);
-    if (await postComment(p.id, draft, mentions)) { setDraft(''); setQuery(null); }
+    if (await postComment(p.id, draft, mentionIds(draft, candidates))) setDraft('');
     setPosting(false);
   }
 
   return (
     <>
-      <div className="mention-wrap">
-        <textarea
-          ref={box} className="input" rows={2} placeholder="Write a comment… @ to mention someone (⌘/Ctrl + Enter to post)"
-          style={{ resize: 'vertical', fontSize: 12.5, lineHeight: 1.6, marginTop: 8 }}
-          value={draft}
-          onChange={e => { setDraft(e.target.value); track(e.target); }}
-          onSelect={e => track(e.currentTarget)}
-          onBlur={() => setQuery(null)}
-          onKeyDown={e => {
-            if (matches.length) {
-              if (e.key === 'ArrowDown') { e.preventDefault(); setActive((active + 1) % matches.length); return; }
-              if (e.key === 'ArrowUp') { e.preventDefault(); setActive((active - 1 + matches.length) % matches.length); return; }
-              if ((e.key === 'Enter' && !e.metaKey && !e.ctrlKey) || e.key === 'Tab') { e.preventDefault(); pick(matches[active]); return; }
-              if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setQuery(null); return; }
-            }
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); }
-          }}
-        />
-        {matches.length > 0 && (
-          <div className="mention-list" role="listbox">
-            {matches.map((m, i) => (
-              <div
-                key={m.id} role="option" aria-selected={i === active}
-                className={`mention-opt${i === active ? ' active' : ''}`}
-                onMouseDown={e => { e.preventDefault(); pick(m); }}
-                onMouseEnter={() => setActive(i)}
-              >
-                <Av e={m} size={20} />
-                <span className="mention-name">{m.name}</span>
-                <span className="mention-role">{m.role}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <MentionTextarea
+        value={draft} onChange={setDraft} candidates={candidates} onSubmit={submit} rows={2}
+        placeholder="Write a comment… @ to mention someone (⌘/Ctrl + Enter to post)" style={{ marginTop: 8 }}
+      />
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
         <button className="btn-solid" style={{ fontSize: 12, padding: '6px 12px' }} disabled={!draft.trim() || posting} onClick={submit}>
           {posting ? <MessageSquareIcon size={12} /> : <SendIcon size={12} />} Add comment

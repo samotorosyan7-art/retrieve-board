@@ -76,6 +76,7 @@ export const NOTIFICATION_KINDS: Record<TaskNotification['kind'], [LucideIcon, s
   file: [PaperclipIcon, 'attached a file'],
   notes: [NotebookPenIcon, 'updated the notes'],
   mention: [AtSignIcon, 'mentioned you'],
+  notes_mention: [AtSignIcon, 'mentioned you in the notes'],
 };
 
 /** 'loading' until the session is known and (if signed in) the team is loaded.

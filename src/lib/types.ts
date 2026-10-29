@@ -47,6 +47,8 @@ export interface Project {
   dueTime?: string;
   created: string;
   notes: string;
+  /** Members the notes @mention (migration 022); they're notified when first mentioned. */
+  notesMentions?: string[];
   timeLogs: TimeLog[];
   files: MatterFile[];
   matterType?: string;
@@ -68,11 +70,11 @@ export interface StatusChange {
   time: string;
 }
 
-/** Something someone else did on a task assigned to you (migration 020), or a comment mentioning you (021). */
+/** Something someone else did on a task assigned to you (migration 020), or a comment (021) or notes (022) mentioning you. */
 export interface TaskNotification {
   id: number;
   projectId: string;
-  kind: 'comment' | 'file' | 'notes' | 'mention';
+  kind: 'comment' | 'file' | 'notes' | 'mention' | 'notes_mention';
   /** Member who did it. */
   actor?: string;
   /** Comment text, file name or the notes (shortened). */
