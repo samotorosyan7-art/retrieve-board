@@ -15,7 +15,7 @@ export function ModalHost() {
     <div className={`modal-backdrop${modal ? ' open' : ''}`} onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
       <div className="modal-box">
         {modal?.kind === 'matter' && <MatterModal client={modal.client} />}
-        {modal?.kind === 'logTime' && <LogTimeModal />}
+        {modal?.kind === 'logTime' && <LogTimeModal key={`${modal.pid}:${modal.index}`} editPid={modal.pid} editIndex={modal.index} />}
         {modal?.kind === 'client' && <ClientModal key={modal.id ?? 'new'} id={modal.id} onSaved={modal.onSaved} />}
         {modal?.kind === 'member' && <MemberModal key={modal.id ?? 'new'} id={modal.id} />}
         {modal?.kind === 'supervisor' && <SupervisorModal key={modal.pid} pid={modal.pid} />}

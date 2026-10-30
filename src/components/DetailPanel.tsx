@@ -22,7 +22,7 @@ export function DetailPanel() {
 function PanelContent({ p }: { p: Project }) {
   const {
     currentUser, team, emp, closePanel, togglePrivacy, setProgress, setStatus, patchProject,
-    addTimeLog, setAssignees, setSupervisor, renameProject, addActivity, archiveProject, deleteProject, toast, setModal,
+    addTimeLog, removeTimeLog, setAssignees, setSupervisor, renameProject, addActivity, archiveProject, deleteProject, toast, setModal,
     comments, loadTaskComments, removeComment,
     taskFiles, loadFilesFor, uploadTaskFiles, removeTaskFile,
   } = useStore();
@@ -317,7 +317,19 @@ function PanelContent({ p }: { p: Project }) {
                     <div className="tl-desc">{l.desc}</div>
                     <div className="tl-meta">{emp(l.who)?.name.split(' ')[0] || ''} · {fmtDate(l.date)}{l.billable === false && ' · Non-billable'}</div>
                   </div>
-                  <div className="tl-right"><div className="tl-hours">{l.hours}h</div></div>
+                  <div className="tl-right" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div className="tl-hours">{l.hours}h</div>
+                    {currentUser && (
+                      <>
+                        <button className="btn-ghost" title="Edit time entry" style={{ padding: '1px 5px', marginLeft: 4 }} onClick={() => setModal({ kind: 'logTime', pid: p.id, index: i })}>
+                          <PencilIcon size={11} />
+                        </button>
+                        <button className="btn-ghost" title="Delete time entry" style={{ padding: '1px 5px' }} onClick={() => removeTimeLog(p.id, i, l)}>
+                          <Trash2Icon size={11} />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

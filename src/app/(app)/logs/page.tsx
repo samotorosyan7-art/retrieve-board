@@ -6,9 +6,9 @@ import { useStore } from '@/components/store';
 import { Av, PageHeader } from '@/components/ui';
 import { canSeeMatter, fmtDate, homePath, today } from '@/lib/helpers';
 import type { Project, TimeLog } from '@/lib/types';
-import { LockIcon, XIcon } from 'lucide-react';
+import { LockIcon, PencilIcon, Trash2Icon, XIcon } from 'lucide-react';
 
-type Row = TimeLog & { p: Project; key: string };
+type Row = TimeLog & { p: Project; index: number; key: string };
 type Filters = { from: string; to: string; who: string; client: string; q: string };
 const EMPTY: Filters = { from: '', to: '', who: '', client: '', q: '' };
 
@@ -26,7 +26,7 @@ const openPicker = (e: React.MouseEvent<HTMLInputElement>) => {
 };
 
 export default function LogsPage() {
-  const { projects, team, emp, currentUser, openPanel, search, toast } = useStore();
+  const { projects, team, emp, currentUser, openPanel, search, toast, setModal, removeTimeLog } = useStore();
   const router = useRouter();
   const [f, setF] = useState<Filters>(EMPTY);
 
@@ -39,7 +39,7 @@ export default function LogsPage() {
   const set = (k: keyof Filters) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(x => ({ ...x, [k]: e.target.value }));
 
   const visible = projects.filter(p => canSeeMatter(p, currentUser, team));
-  const all: Row[] = visible.flatMap(p => (p.timeLogs || []).map((l, i) => ({ ...l, p, key: `${p.id}:${i}` })));
+  const all: Row[] = visible.flatMap(p => (p.timeLogs || []).map((l, i) => ({ ...l, p, index: i, key: `${p.id}:${i}` })));
   const q = (f.q || search).toLowerCase();
   const rows = all
     .filter(r =>
@@ -107,14 +107,15 @@ export default function LogsPage() {
         ) : (
           <table className="data-table">
             <colgroup>
-              {[11, 16, 33, 25, 15].map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
+              {[11, 16, 30, 23, 11, 9].map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
             </colgroup>
             <thead>
-              <tr><th>Date</th><th>Member</th><th>Description</th><th>Task</th><th style={{ textAlign: 'right' }}>Hours</th></tr>
+              <tr><th>Date</th><th>Member</th><th>Description</th><th>Task</th><th style={{ textAlign: 'right' }}>Hours</th><th /></tr>
             </thead>
             <tbody>
               {rows.map(r => {
                 const e = emp(r.who);
+                const { p, index } = r, log = p.timeLogs[index];
                 return (
                   <tr key={r.key} onClick={() => openPanel(r.p.id)}>
                     <td style={{ fontSize: 11.5, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>{fmtDate(r.date)}</td>
@@ -132,6 +133,14 @@ export default function LogsPage() {
                       {r.hours}h
                       {r.billable === false && <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)' }}>Non-billable</div>}
                     </td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} onClick={ev => ev.stopPropagation()}>
+                      <button className="btn-ghost" title="Edit time entry" style={{ padding: '2px 6px' }} onClick={() => setModal({ kind: 'logTime', pid: p.id, index })}>
+                        <PencilIcon size={12} />
+                      </button>
+                      <button className="btn-ghost" title="Delete time entry" style={{ padding: '2px 6px', marginLeft: 2 }} onClick={() => removeTimeLog(p.id, index, log)}>
+                        <Trash2Icon size={12} />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -140,6 +149,7 @@ export default function LogsPage() {
               <tr>
                 <td colSpan={4} style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-tertiary)' }}>Total</td>
                 <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{total}h</td>
+                <td />
               </tr>
             </tfoot>
           </table>

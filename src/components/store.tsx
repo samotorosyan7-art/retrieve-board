@@ -7,7 +7,7 @@ import {
   rowToActivity, rowToClient, rowToComment, rowToMember, rowToMessage, rowToNotification, rowToProject, write, type Mutation,
 } from '@/lib/db';
 import { sendMatterAssignmentEmail } from '@/lib/email';
-import { checkFile, canDeleteMatter, canEditTitle, canMakePrivate, dmRoom, isAdministrationTask, stat, today } from '@/lib/helpers';
+import { checkFile, canDeleteMatter, canEditTitle, canMakePrivate, canSeeMatter, dmRoom, isAdministrationTask, stat, today } from '@/lib/helpers';
 import { getSupabase } from '@/lib/supabase';
 import type {
   Activity, ChatMessage, Client, Currency, FirmSettings, Member, Project, StatusId, SyncState, TaskComment, TaskFile, TaskNotification, TimeLog,
@@ -85,7 +85,8 @@ export type AuthStatus = 'loading' | 'signedOut' | 'noAccess' | 'signedIn';
 
 export type ModalState =
   | { kind: 'matter'; client?: string }
-  | { kind: 'logTime' }
+  /** With `pid` and `index`, edits that existing entry instead of logging a new one. */
+  | { kind: 'logTime'; pid?: string; index?: number }
   | { kind: 'client'; id: string | null; onSaved?: (id: string) => void }
   | { kind: 'member'; id: string | null }
   | { kind: 'supervisor'; pid: string }
@@ -592,6 +593,44 @@ function useStoreValue() {
     if (!p) return null;
     return patchProject(pid, { timeLogs: [...p.timeLogs, log] });
   };
+  /** The entry at `index`, if it's still `expected` — the list may have changed (realtime) since it was shown. */
+  const timeLogAt = (pid: string, index: number, expected: TimeLog) => {
+    const p = state.current.projects.find(x => x.id === pid);
+    const log = p?.timeLogs[index];
+    if (!p || !log) return null;
+    if (JSON.stringify(log) !== JSON.stringify(expected)) {
+      toast(TriangleAlertIcon, 'Entry changed', 'This time entry was changed by someone else — please try again.');
+      return null;
+    }
+    // Anyone who can see the task edits or deletes its entries (migration 023).
+    if (!state.current.currentUser || !canSeeMatter(p, state.current.currentUser, state.current.team)) {
+      toast(LockIcon, 'Cannot change', 'You can only change time entries on tasks you can see.');
+      return null;
+    }
+    return p;
+  };
+  const updateTimeLog = (pid: string, index: number, expected: TimeLog, log: TimeLog) => {
+    const p = timeLogAt(pid, index, expected);
+    if (!p) return null;
+    const next = patchProject(pid, { timeLogs: p.timeLogs.map((l, i) => (i === index ? log : l)) });
+    addActivity(me(), `edited a time entry on <b>${p.title}</b>`, [p]);
+    return next;
+  };
+  const removeTimeLog = (pid: string, index: number, expected: TimeLog) => {
+    if (!timeLogAt(pid, index, expected)) return;
+    setConfirmState({
+      title: 'Delete time entry?',
+      msg: `${expected.hours}h — "${expected.desc}" will be permanently removed.`,
+      confirmLabel: 'Delete',
+      onConfirm: () => {
+        const p = timeLogAt(pid, index, expected);
+        if (!p) return;
+        patchProject(pid, { timeLogs: p.timeLogs.filter((_, i) => i !== index) });
+        addActivity(me(), `removed <b>${expected.hours}h</b> from <b>${p.title}</b>`, [p]);
+        toast(Trash2Icon, 'Time entry deleted', `${expected.hours}h removed from ${p.title}`);
+      },
+    });
+  };
   const setAssignees = (id: string, assignees: string[]) => {
     const user = state.current.currentUser;
     if (!user?.isAdmin) { toast(LockIcon, 'Admins only', 'Only admins can reassign a task.'); return; }
@@ -612,7 +651,7 @@ function useStoreValue() {
     addActivity(me(), `renamed <b>${p.title}</b> to <b>${title}</b>`, [p]);
     return true;
   };
-  /** Put a billable time entry on, or take it off, the client's invoice. Admins only (time entries are admin-edit, migration 003). */
+  /** Put a billable time entry on, or take it off, the client's invoice. Admins only. */
   const setLogInInvoice = (pid: string, index: number, inInvoice: boolean) => {
     if (!state.current.currentUser?.isAdmin) { toast(LockIcon, 'Admins only', 'Only admins can choose what goes on an invoice.'); return; }
     const p = state.current.projects.find(x => x.id === pid);
@@ -907,7 +946,7 @@ function useStoreValue() {
     toggleTheme: () => setIsDark(d => !d),
     toast, login, logout, sendPasswordEmail, emp, openPanel, closePanel: () => setSelectedPid(null),
     closeModal: () => setModal(null),
-    addActivity, saveProject, patchProject, setStatus, sendToReview, setSupervisor, setProgress, togglePrivacy, addTimeLog, setAssignees, renameProject, setLogInInvoice, createProject, archiveProject, deleteProject,
+    addActivity, saveProject, patchProject, setStatus, sendToReview, setSupervisor, setProgress, togglePrivacy, addTimeLog, updateTimeLog, removeTimeLog, setAssignees, renameProject, setLogInInvoice, createProject, archiveProject, deleteProject,
     saveClient, deleteClient, saveMember, deleteMember,
     loadRoom, sendMessage, setActiveChatRoom, clearSavedState,
     comments, loadTaskComments, postComment, removeComment, lastLogins, refreshLastLogins,
