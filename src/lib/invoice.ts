@@ -31,12 +31,22 @@ export const roundHours = (h: number) => Math.round(h * 100) / 100; // avoid 0.1
 
 export const lineAmount = (l: InvoiceLine) => (l.hours !== undefined ? l.hours * (l.rate || 0) : l.amount || 0);
 
-/** What a month of `hours` costs under `terms`: the monthly fee (covering the regular hours), then the hours above them × the rate. */
+/** The terms as "Label: value" rows, as shown on the client and on the invoice. Unset (zero) terms are left out. */
+export function termRows(terms: InvoiceTerms, money: (v: number) => string = String): [string, string][] {
+  const rows: [string, string | false][] = [
+    ['Monthly retainer', terms.monthlyFee > 0 && money(terms.monthlyFee)],
+    ['Regular hours under retainer', terms.regularHours > 0 && `${terms.regularHours}h`],
+    ['Hourly rate', terms.hourlyRate > 0 && `${money(terms.hourlyRate)}/hr`],
+  ];
+  return rows.filter((r): r is [string, string] => !!r[1]);
+}
+
+/** What a month of `hours` costs under `terms`: the monthly retainer (covering the regular hours), then the hours above them × the rate. */
 export function timeCharges(terms: InvoiceTerms, hours: number, money: (v: number) => string = String) {
   const extra = roundHours(Math.max(0, hours - terms.regularHours));
   const retainer = terms.monthlyFee > 0 || terms.regularHours > 0;
   const charges: { label: string; amount: number }[] = [];
-  if (terms.monthlyFee > 0) charges.push({ label: `Monthly fee${terms.regularHours > 0 ? ` (includes ${terms.regularHours}h)` : ''}`, amount: terms.monthlyFee });
+  if (terms.monthlyFee > 0) charges.push({ label: `Monthly retainer${terms.regularHours > 0 ? ` (includes ${terms.regularHours}h)` : ''}`, amount: terms.monthlyFee });
   if (extra > 0) charges.push({ label: `${retainer ? 'Additional hours' : 'Hours'}: ${extra}h × ${money(terms.hourlyRate)}`, amount: extra * terms.hourlyRate });
   return { extra, charges, sub: charges.reduce((s, c) => s + c.amount, 0) };
 }
@@ -134,6 +144,17 @@ export function invoiceHtml(doc: InvoiceDoc, firm: FirmSettings, logoUrl: string
       </tr>
     </table>
 
+    ${doc.terms && termRows(doc.terms, money).length ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;border:1px solid ${C.line};border-radius:8px;background:${C.panel}">
+      <tr><td colspan="3" style="padding:12px 16px 0;font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:${C.faint}">Billing terms</td></tr>
+      <tr>${termRows(doc.terms, money).map(([k, v]) => `
+        <td valign="top" style="padding:4px 16px 12px">
+          <div style="font-size:10.5px;color:${C.muted}">${esc(k)}</div>
+          <div style="font-size:12.5px;font-weight:700;color:${C.text};font-family:${MONO};margin-top:2px">${esc(v)}</div>
+        </td>`).join('')}
+      </tr>
+    </table>` : ''}
+
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;border:1px solid ${C.line};border-radius:8px;border-collapse:separate;overflow:hidden">
       ${doc.terms ? `
       <tr>${th('Task')}${th('Description')}${attorneys ? th('Attorney') : ''}${th('Hours', true)}</tr>
@@ -175,6 +196,7 @@ export function invoiceText(doc: InvoiceDoc, firm: FirmSettings) {
     : `${l.desc}: ${money(lineAmount(l))}`;
   const body = doc.terms
     ? [
+      ...(termRows(doc.terms, money).length ? ['Billing terms:', ...termRows(doc.terms, money).map(([k, v]) => `  ${k}: ${v}`), ''] : []),
       ...linesByTask(doc.lines).flatMap(g => g.lines).map(l => `${l.task ? `${l.task} — ` : ''}${l.desc}${who(l)}: ${l.hours}h`),
       '', `Total hours: ${lineHours(doc.lines)}h`, '',
       ...timeCharges(doc.terms, lineHours(doc.lines), money).charges.map(c => `${c.label}: ${money(c.amount)}`),

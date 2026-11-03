@@ -130,13 +130,13 @@ function BillingConfigPanel() {
     <>
       <div className="settings-section">
         <div className="ss-title">Billing Configuration</div>
-        <div className="ss-sub">Each client&apos;s hourly rate, regular hours and monthly fee are set on the Clients page — only admins can see them.</div>
+        <div className="ss-sub">Each client&apos;s monthly retainer, regular hours under retainer and hourly rate are set on the Clients page — only admins can see them.</div>
         <div style={{ padding: '12px 14px', background: 'rgba(56,189,248,0.07)', border: '1px solid rgba(56,189,248,0.18)', borderRadius: 'var(--r-lg)', marginTop: 4 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 3 }}>How invoicing works</div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-            1. On <strong>Clients</strong>, edit a client and set its billing terms: hourly rate, regular hours and monthly fee<br />
+            1. On <strong>Clients</strong>, edit a client and set its billing terms: monthly retainer, regular hours under retainer and hourly rate<br />
             2. Go to <strong>Billing &amp; Invoices</strong> and select the client — their time entries for the month are listed by task<br />
-            3. The total is the monthly fee plus hours above the regular hours × the hourly rate (e.g. 12h regular, 14h logged → fee + 2h × rate)<br />
+            3. The total is the monthly retainer plus hours above the regular hours under retainer × the hourly rate (e.g. 12h under retainer, 14h logged → retainer + 2h × rate)<br />
             4. Export PDF or send it, choosing the bank account to show<br />
             For a fixed amount without time entries, use <strong>New monthly invoice</strong>
           </div>

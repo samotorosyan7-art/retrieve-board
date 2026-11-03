@@ -19,7 +19,7 @@ const fail = (error: string, status: number) => NextResponse.json({ error }, { s
 
 /** Emails an invoice from Billing & Invoices to a client. Admins only.
  *  New invoices: firm details and the bank account come from firm_settings, and a time invoice's currency, rate,
- *  regular hours and monthly fee from the client's client_billing row (migration 024) — not from the request.
+ *  regular hours under retainer and monthly retainer from the client's client_billing row (migration 024) — not from the request.
  *  The invoice is saved to `invoices` once sent. Re-sends use the saved invoice exactly as it was first sent. */
 export async function POST(req: Request) {
   const APP_URL = process.env.APP_URL || new URL(req.url).origin;

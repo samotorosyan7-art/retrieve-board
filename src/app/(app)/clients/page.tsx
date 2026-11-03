@@ -5,7 +5,7 @@ import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
 import { AvStack, PageHeader, Tag } from '@/components/ui';
 import { canSeeMatter, clientColor, clientInitials, firstWords, fmtCurrency, fmtDate, fmtDue, isOpen, pri, stat, today } from '@/lib/helpers';
-import { roundHours, timeCharges } from '@/lib/invoice';
+import { roundHours, termRows, timeCharges } from '@/lib/invoice';
 import type { Client } from '@/lib/types';
 import { Building2Icon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 
@@ -163,12 +163,10 @@ function ClientDetail({ c, onDeleted }: { c: Client; onDeleted: () => void }) {
             </div>
             {terms ? (
               <div className="contact-grid">
-                {([
-                  ['Hourly rate', terms.hourlyRate ? `${fmtCurrency(terms.hourlyRate, terms.currency)}/hr` : ''],
-                  ['Regular hours / month', terms.regularHours ? `${terms.regularHours}h` : ''],
-                  ['Monthly fee', terms.monthlyFee ? fmtCurrency(terms.monthlyFee, terms.currency) : ''],
+                {[
+                  ...termRows(terms, v => fmtCurrency(v, terms.currency)),
                   ['This month so far', `${monthHours}h → ${fmtCurrency(timeCharges(terms, monthHours).sub, terms.currency)} excl. VAT`],
-                ] as const).map(([label, v]) => (
+                ].map(([label, v]) => (
                   <div key={label} className="contact-item">
                     <div className="ci-label">{label}</div>
                     <div className="ci-value" style={{ fontFamily: 'var(--font-mono)' }}>{v || <span style={{ color: 'var(--text-tertiary)' }}>—</span>}</div>
@@ -178,7 +176,7 @@ function ClientDetail({ c, onDeleted }: { c: Client; onDeleted: () => void }) {
             ) : (
               <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', padding: '14px 0', textAlign: 'center', border: '1px dashed var(--border-subtle)', borderRadius: 'var(--r-lg)' }}>
                 No billing terms yet.{' '}
-                <button className="btn-ghost" style={{ fontSize: 12, padding: '2px 8px' }} onClick={() => setModal({ kind: 'client', id: c.id })}>Set hourly rate &amp; regular hours</button>
+                <button className="btn-ghost" style={{ fontSize: 12, padding: '2px 8px' }} onClick={() => setModal({ kind: 'client', id: c.id })}>Set retainer &amp; hourly rate</button>
               </div>
             )}
           </div>

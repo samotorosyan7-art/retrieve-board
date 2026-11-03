@@ -805,7 +805,7 @@ function useStoreValue() {
     setClients(cs => (cs.some(x => x.id === c.id) ? cs.map(x => (x.id === c.id ? c : x)) : [...cs, c]));
     return persist({ type: 'client', entity: c });
   };
-  /** Admins: set a client's hourly rate, regular hours and monthly fee. The client row must already be saved. */
+  /** Admins: set a client's monthly retainer, regular hours under retainer and hourly rate. The client row must already be saved. */
   const saveClientBilling = async (b: ClientBilling) => {
     const prev = state.current.clientBilling[b.clientId];
     setClientBilling(m => ({ ...m, [b.clientId]: b }));

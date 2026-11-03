@@ -98,14 +98,14 @@ export function ClientModal({ id, onSaved }: { id: string | null; onSaved?: (id:
             </div>
             <div className="form-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
               <div><label className="form-label">Hourly rate ({currency})</label><input className="input" type="number" min={0} step={currency === 'AMD' ? 1000 : 10} value={terms.hourlyRate} onChange={setTerm('hourlyRate')} placeholder={currency === 'AMD' ? 'e.g. 50000' : 'e.g. 200'} /></div>
-              <div><label className="form-label">Regular hours / month</label><input className="input" type="number" min={0} step={1} value={terms.regularHours} onChange={setTerm('regularHours')} placeholder="e.g. 12" /></div>
-              <div><label className="form-label">Monthly fee ({currency})</label><input className="input" type="number" min={0} step={currency === 'AMD' ? 1000 : 10} value={terms.monthlyFee} onChange={setTerm('monthlyFee')} placeholder={currency === 'AMD' ? 'e.g. 500000' : 'e.g. 2000'} /></div>
+              <div><label className="form-label">Regular hours under retainer</label><input className="input" type="number" min={0} step={1} value={terms.regularHours} onChange={setTerm('regularHours')} placeholder="e.g. 12" /></div>
+              <div><label className="form-label">Monthly retainer ({currency})</label><input className="input" type="number" min={0} step={currency === 'AMD' ? 1000 : 10} value={terms.monthlyFee} onChange={setTerm('monthlyFee')} placeholder={currency === 'AMD' ? 'e.g. 500000' : 'e.g. 2000'} /></div>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
               {termNums.monthlyFee > 0 || termNums.regularHours > 0
-                ? <>The monthly fee covers the first {termNums.regularHours}h; hours above that are billed at the hourly rate.
+                ? <>The monthly retainer covers the first {termNums.regularHours}h; hours above that are billed at the hourly rate.
                     {' '}E.g. {termNums.regularHours + 2}h logged → {fmtCurrency(timeCharges(termNums, termNums.regularHours + 2).sub, currency)}.</>
-                : 'With no regular hours or monthly fee, every hour logged is billed at the hourly rate.'}
+                : 'With no regular hours under retainer or monthly retainer, every hour logged is billed at the hourly rate.'}
             </div>
           </div>
         )}

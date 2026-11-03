@@ -7,7 +7,7 @@ import { InvoiceModal } from '@/components/modals/InvoiceModal';
 import { PageHeader } from '@/components/ui';
 import { LOGO_SRC } from '@/lib/constants';
 import { fmtCurrency, homePath, today } from '@/lib/helpers';
-import { roundHours, timeCharges, type InvoiceLine } from '@/lib/invoice';
+import { roundHours, termRows, timeCharges, type InvoiceLine } from '@/lib/invoice';
 import type { Currency } from '@/lib/types';
 import { FileTextIcon, LockIcon, MailIcon, PencilIcon, ReceiptIcon, TriangleAlertIcon } from 'lucide-react';
 
@@ -131,7 +131,7 @@ function Invoice({ client, entries, period, includeVat, setIncludeVat, onTotal }
   const [open, setOpen] = useState(false);
   const isAdmin = !!currentUser?.isAdmin;
   const invNum = useMemo(() => newInvNum(period), [period]);
-  // Rate, regular hours and monthly fee are set per client on the Clients page (migration 024).
+  // Hourly rate, regular hours under retainer and monthly retainer are set per client on the Clients page (migration 024).
   const record = clients.find(c => c.name.trim().toLowerCase() === client.trim().toLowerCase());
   const terms = record ? clientBilling[record.id] : undefined;
   const currency = terms?.currency ?? 'AMD';
@@ -146,7 +146,7 @@ function Invoice({ client, entries, period, includeVat, setIncludeVat, onTotal }
   useEffect(() => { onTotal(terms ? { amount: total, currency } : null); }, [total, currency, terms, onTotal]);
 
   const openInvoice = () => (!terms
-    ? toast(TriangleAlertIcon, 'No billing terms', `Set ${client}'s hourly rate, regular hours and monthly fee on the Clients page first.`)
+    ? toast(TriangleAlertIcon, 'No billing terms', `Set ${client}'s monthly retainer, regular hours under retainer and hourly rate on the Clients page first.`)
     : total > 0 ? setOpen(true) : toast(TriangleAlertIcon, 'Nothing to charge', 'No entries on the invoice add up to an amount.'));
 
   return (
@@ -156,13 +156,13 @@ function Invoice({ client, entries, period, includeVat, setIncludeVat, onTotal }
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>
             {terms
-              ? [terms.monthlyFee > 0 && `${fmtCurrency(terms.monthlyFee, currency)}/month`, terms.regularHours > 0 && `${terms.regularHours}h included`, terms.hourlyRate > 0 && `${fmtCurrency(terms.hourlyRate, currency)}/hr${terms.monthlyFee > 0 || terms.regularHours > 0 ? ' above that' : ''}`].filter(Boolean).join(' · ') || 'Billing terms are all zero'
+              ? termRows(terms, v => fmtCurrency(v, currency)).map(([k, v]) => `${k}: ${v}`).join(' · ') || 'Billing terms are all zero'
               : `No billing terms for ${client}`}
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1 }}>
             {terms
-              ? <>Billing terms come from the client.{isAdmin && ' Untick an entry to leave it off the invoice.'} Then export the PDF or send it — you choose the bank account and options there.</>
-              : record ? 'Set the hourly rate, regular hours and monthly fee for this client to calculate the invoice.' : `"${client}" isn't in your client list — add it on the Clients page to set billing terms.`}
+              ? <>Billing terms come from the client and are printed on the invoice.{isAdmin && ' Untick an entry to leave it off the invoice.'} Then export the PDF or send it — you choose the bank account and options there.</>
+              : record ? 'Set the monthly retainer, regular hours under retainer and hourly rate for this client to calculate the invoice.' : `"${client}" isn't in your client list — add it on the Clients page to set billing terms.`}
           </div>
         </div>
         {record && (
@@ -216,7 +216,7 @@ function Invoice({ client, entries, period, includeVat, setIncludeVat, onTotal }
             <tr>
               <td />
               <td colSpan={3} style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
-                Total hours{terms && terms.regularHours > 0 && <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}> · {terms.regularHours}h regular{hours > terms.regularHours ? `, ${roundHours(hours - terms.regularHours)}h additional` : `, ${roundHours(terms.regularHours - hours)}h unused`}</span>}
+                Total hours{terms && terms.regularHours > 0 && <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}> · {terms.regularHours}h under retainer{hours > terms.regularHours ? `, ${roundHours(hours - terms.regularHours)}h additional` : `, ${roundHours(terms.regularHours - hours)}h unused`}</span>}
               </td>
               <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-primary)' }}>{hours}h</td>
             </tr>
