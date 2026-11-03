@@ -3,8 +3,12 @@ import type { Currency, FirmSettings } from './types';
 /* One invoice document, used for both "Export PDF" (printed from the browser) and the email to the client
    (/api/notify/invoice) so they always match. Tables + inline styles only, so it renders in email clients too. */
 
-/** A billed line. Time lines have hours × rate; amount lines (simple invoices) just an amount. */
-export type InvoiceLine = { desc: string; attorney?: string; hours?: number; rate?: number; amount?: number };
+/** A billed line. Time lines have hours (and the task they were logged on); amount lines (simple invoices) just an amount.
+ *  Time invoices sent before migration 024 have no `terms` and carry a `rate` per line instead. */
+export type InvoiceLine = { desc: string; task?: string; attorney?: string; hours?: number; rate?: number; amount?: number };
+
+/** The client's billing terms, copied onto a time invoice so it always shows what it was charged under. */
+export type InvoiceTerms = { hourlyRate: number; regularHours: number; monthlyFee: number };
 
 export type InvoiceDoc = {
   kind: 'time' | 'amount';
@@ -15,6 +19,7 @@ export type InvoiceDoc = {
   clientDetails?: string; // address / tax ID, one per line
   currency: Currency;
   lines: InvoiceLine[];
+  terms?: InvoiceTerms;
   includeVat: boolean;
   showAttorneys: boolean;
   paymentTerms: string;
@@ -22,12 +27,33 @@ export type InvoiceDoc = {
   note?: string;
 };
 
+export const roundHours = (h: number) => Math.round(h * 100) / 100; // avoid 0.1 + 0.2 = 0.30000000000000004
+
 export const lineAmount = (l: InvoiceLine) => (l.hours !== undefined ? l.hours * (l.rate || 0) : l.amount || 0);
 
-export function invoiceTotals(doc: Pick<InvoiceDoc, 'lines' | 'includeVat'>, vatRate: number) {
-  const sub = doc.lines.reduce((s, l) => s + lineAmount(l), 0);
+/** What a month of `hours` costs under `terms`: the monthly fee (covering the regular hours), then the hours above them × the rate. */
+export function timeCharges(terms: InvoiceTerms, hours: number, money: (v: number) => string = String) {
+  const extra = roundHours(Math.max(0, hours - terms.regularHours));
+  const retainer = terms.monthlyFee > 0 || terms.regularHours > 0;
+  const charges: { label: string; amount: number }[] = [];
+  if (terms.monthlyFee > 0) charges.push({ label: `Monthly fee${terms.regularHours > 0 ? ` (includes ${terms.regularHours}h)` : ''}`, amount: terms.monthlyFee });
+  if (extra > 0) charges.push({ label: `${retainer ? 'Additional hours' : 'Hours'}: ${extra}h × ${money(terms.hourlyRate)}`, amount: extra * terms.hourlyRate });
+  return { extra, charges, sub: charges.reduce((s, c) => s + c.amount, 0) };
+}
+
+export const lineHours = (lines: InvoiceLine[]) => roundHours(lines.reduce((s, l) => s + (l.hours || 0), 0));
+
+export function invoiceTotals(doc: Pick<InvoiceDoc, 'lines' | 'includeVat' | 'terms'>, vatRate: number) {
+  const sub = doc.terms ? timeCharges(doc.terms, lineHours(doc.lines)).sub : doc.lines.reduce((s, l) => s + lineAmount(l), 0);
   const vat = doc.includeVat ? sub * (vatRate / 100) : 0;
   return { sub, vat, total: sub + vat };
+}
+
+/** Time lines grouped by task, in the order the tasks first appear. */
+export function linesByTask(lines: InvoiceLine[]) {
+  const groups = new Map<string, InvoiceLine[]>();
+  lines.forEach(l => { const k = l.task || ''; groups.set(k, [...(groups.get(k) || []), l]); });
+  return [...groups].map(([task, ls]) => ({ task, lines: ls, hours: lineHours(ls) }));
 }
 
 /** Amounts on invoices use the currency code, not a symbol: "250,000 AMD", "1,200.00 USD". */
@@ -49,6 +75,7 @@ export function invoiceHtml(doc: InvoiceDoc, firm: FirmSettings, logoUrl: string
   const { sub, vat, total } = invoiceTotals(doc, firm.vatRate);
   const timeCols = doc.kind === 'time';
   const attorneys = timeCols && doc.showAttorneys;
+  const hours = lineHours(doc.lines);
 
   const th = (label: string, right = false) =>
     `<th align="${right ? 'right' : 'left'}" style="padding:9px 12px;font-size:9.5px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${C.faint};background:${C.panel};border-bottom:1px solid ${C.line}">${label}</th>`;
@@ -108,11 +135,19 @@ export function invoiceHtml(doc: InvoiceDoc, firm: FirmSettings, logoUrl: string
     </table>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;border:1px solid ${C.line};border-radius:8px;border-collapse:separate;overflow:hidden">
+      ${doc.terms ? `
+      <tr>${th('Task')}${th('Description')}${attorneys ? th('Attorney') : ''}${th('Hours', true)}</tr>
+      ${linesByTask(doc.lines).flatMap(g => g.lines).map(l =>
+        `<tr>${td(`<strong>${esc(l.task || '')}</strong>`)}${td(br(l.desc))}${attorneys ? td(esc(l.attorney || '')) : ''}${td(`${l.hours ?? 0}h`, true, true)}</tr>`).join('')}
+      <tr><td colspan="${attorneys ? 3 : 2}" style="padding:10px 12px;font-size:12px;font-weight:700;color:${C.text}">Total hours</td>
+        <td align="right" style="padding:10px 12px;font-size:12px;font-weight:700;color:${C.text};font-family:${MONO}">${hours}h</td></tr>`
+    : `
       <tr>${th('Description')}${attorneys ? th('Attorney') : ''}${timeCols ? th('Hours', true) + th(`Rate (${esc(doc.currency)}/hr)`, true) : ''}${th('Amount', true)}</tr>
-      ${doc.lines.map(l => `<tr>${td(br(l.desc))}${attorneys ? td(esc(l.attorney || '')) : ''}${timeCols ? td(`${l.hours ?? 0}h`, true, true) + td(money(l.rate || 0), true, true) : ''}${td(money(lineAmount(l)), true, true)}</tr>`).join('')}
+      ${doc.lines.map(l => `<tr>${td(br(l.desc))}${attorneys ? td(esc(l.attorney || '')) : ''}${timeCols ? td(`${l.hours ?? 0}h`, true, true) + td(money(l.rate || 0), true, true) : ''}${td(money(lineAmount(l)), true, true)}</tr>`).join('')}`}
     </table>
 
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right" style="width:280px;margin-top:14px">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right" style="width:${doc.terms ? 360 : 280}px;margin-top:14px">
+      ${doc.terms ? timeCharges(doc.terms, hours, money).charges.map(c => row(esc(c.label), money(c.amount))).join('') : ''}
       ${row('Subtotal', money(sub))}
       ${doc.includeVat ? row(`VAT (${firm.vatRate}%)`, money(vat)) : ''}
       ${row(`Total due${doc.includeVat ? '' : ' · excl. VAT'}`, money(total), true)}
@@ -134,12 +169,20 @@ export function invoiceHtml(doc: InvoiceDoc, firm: FirmSettings, logoUrl: string
 export function invoiceText(doc: InvoiceDoc, firm: FirmSettings) {
   const money = (v: number) => invoiceMoney(v, doc.currency);
   const { sub, vat, total } = invoiceTotals(doc, firm.vatRate);
+  const who = (l: InvoiceLine) => (doc.showAttorneys && l.attorney ? ` — ${l.attorney}` : '');
   const line = (l: InvoiceLine) => doc.kind === 'time'
-    ? `${l.desc}${doc.showAttorneys && l.attorney ? ` — ${l.attorney}` : ''}: ${l.hours}h × ${money(l.rate || 0)} = ${money(lineAmount(l))}`
+    ? `${l.desc}${who(l)}: ${l.hours}h × ${money(l.rate || 0)} = ${money(lineAmount(l))}`
     : `${l.desc}: ${money(lineAmount(l))}`;
+  const body = doc.terms
+    ? [
+      ...linesByTask(doc.lines).flatMap(g => g.lines).map(l => `${l.task ? `${l.task} — ` : ''}${l.desc}${who(l)}: ${l.hours}h`),
+      '', `Total hours: ${lineHours(doc.lines)}h`, '',
+      ...timeCharges(doc.terms, lineHours(doc.lines), money).charges.map(c => `${c.label}: ${money(c.amount)}`),
+    ]
+    : doc.lines.map(line);
   return [
     `Invoice ${doc.invNum} — ${firm.legalName || firm.name}`, `Issued ${fmtIssue(doc.issueDate)}${doc.period ? ` · Period: ${doc.period}` : ''}`,
-    `Billed to: ${doc.client}`, '', ...doc.lines.map(line), '',
+    `Billed to: ${doc.client}`, '', ...body, '',
     `Subtotal: ${money(sub)}`, ...(doc.includeVat ? [`VAT (${firm.vatRate}%): ${money(vat)}`] : []),
     `Total due${doc.includeVat ? '' : ' (excl. VAT)'}: ${money(total)}`, `Payment terms: ${doc.paymentTerms}`,
     ...(doc.note ? ['', doc.note] : []), ...(doc.bankDetails ? ['', `Bank transfer: ${doc.bankDetails}`] : []),

@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useNav } from '@/components/nav';
 import { useStore } from '@/components/store';
 import { AvStack, PageHeader, Tag } from '@/components/ui';
-import { canSeeMatter, clientColor, clientInitials, firstWords, fmtDate, fmtDue, isOpen, pri, stat } from '@/lib/helpers';
+import { canSeeMatter, clientColor, clientInitials, firstWords, fmtCurrency, fmtDate, fmtDue, isOpen, pri, stat, today } from '@/lib/helpers';
+import { roundHours, timeCharges } from '@/lib/invoice';
 import type { Client } from '@/lib/types';
 import { Building2Icon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 
@@ -86,7 +87,7 @@ export default function ClientsPage() {
 }
 
 function ClientDetail({ c, onDeleted }: { c: Client; onDeleted: () => void }) {
-  const { projects, team, currentUser, setModal, deleteClient } = useStore();
+  const { projects, team, currentUser, setModal, deleteClient, clientBilling } = useStore();
   const { openMatter } = useNav();
   const [areaFilter, setAreaFilter] = useState('all');
 
@@ -97,6 +98,11 @@ function ClientDetail({ c, onDeleted }: { c: Client; onDeleted: () => void }) {
   const shown = areaFilter === 'all' ? all : areaMap[areaFilter] || [];
   const hours = all.reduce((sum, p) => sum + (p.timeLogs || []).reduce((h, l) => h + l.hours, 0), 0);
   const col = clientColor(c.name);
+  // Billing terms and this month's billable hours (admins only), as the Billing page will invoice them.
+  const terms = currentUser?.isAdmin ? clientBilling[c.id] : undefined;
+  const month = today().slice(0, 7);
+  const monthHours = roundHours(all.reduce((sum, p) => sum + (p.timeLogs || []).reduce((h, l) =>
+    h + (l.date?.startsWith(month) && l.billable !== false && l.inInvoice !== false ? l.hours : 0), 0), 0));
 
   const stats: [string, number | string][] = [
     ['Tasks', all.length],
@@ -149,6 +155,34 @@ function ClientDetail({ c, onDeleted }: { c: Client; onDeleted: () => void }) {
             ))}
           </div>
         </div>
+
+        {currentUser?.isAdmin && (
+          <div>
+            <div className="cdc-section-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Billing terms</span><span style={{ fontWeight: 400 }}>Admins only</span>
+            </div>
+            {terms ? (
+              <div className="contact-grid">
+                {([
+                  ['Hourly rate', terms.hourlyRate ? `${fmtCurrency(terms.hourlyRate, terms.currency)}/hr` : ''],
+                  ['Regular hours / month', terms.regularHours ? `${terms.regularHours}h` : ''],
+                  ['Monthly fee', terms.monthlyFee ? fmtCurrency(terms.monthlyFee, terms.currency) : ''],
+                  ['This month so far', `${monthHours}h → ${fmtCurrency(timeCharges(terms, monthHours).sub, terms.currency)} excl. VAT`],
+                ] as const).map(([label, v]) => (
+                  <div key={label} className="contact-item">
+                    <div className="ci-label">{label}</div>
+                    <div className="ci-value" style={{ fontFamily: 'var(--font-mono)' }}>{v || <span style={{ color: 'var(--text-tertiary)' }}>—</span>}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', padding: '14px 0', textAlign: 'center', border: '1px dashed var(--border-subtle)', borderRadius: 'var(--r-lg)' }}>
+                No billing terms yet.{' '}
+                <button className="btn-ghost" style={{ fontSize: 12, padding: '2px 8px' }} onClick={() => setModal({ kind: 'client', id: c.id })}>Set hourly rate &amp; regular hours</button>
+              </div>
+            )}
+          </div>
+        )}
 
         {c.notes && (
           <div>

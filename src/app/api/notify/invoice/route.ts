@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { normalizeFirm } from '@/lib/helpers';
-import { invoiceTotals, type InvoiceDoc, type InvoiceLine } from '@/lib/invoice';
+import { invoiceTotals, type InvoiceDoc, type InvoiceLine, type InvoiceTerms } from '@/lib/invoice';
 import { sendInvoiceEmail } from '@/lib/mail-server';
 import type { Currency, FirmSettings } from '@/lib/types';
 
@@ -18,8 +18,9 @@ const num = (v: unknown) => Math.max(0, Number(v) || 0);
 const fail = (error: string, status: number) => NextResponse.json({ error }, { status });
 
 /** Emails an invoice from Billing & Invoices to a client. Admins only.
- *  New invoices: firm details and the bank account come from firm_settings, not from the request, and the
- *  invoice is saved to `invoices` once sent. Re-sends use the saved invoice exactly as it was first sent. */
+ *  New invoices: firm details and the bank account come from firm_settings, and a time invoice's currency, rate,
+ *  regular hours and monthly fee from the client's client_billing row (migration 024) — not from the request.
+ *  The invoice is saved to `invoices` once sent. Re-sends use the saved invoice exactly as it was first sent. */
 export async function POST(req: Request) {
   const APP_URL = process.env.APP_URL || new URL(req.url).origin;
 
@@ -56,17 +57,29 @@ export async function POST(req: Request) {
   if (!currency || !d.client || !d.invNum || !Array.isArray(d.lines)) return fail('Bad request.', 400);
 
   const lines: InvoiceLine[] = d.lines.slice(0, 500).map(l => (kind === 'time'
-    ? { desc: str(l.desc, 1000), attorney: str(l.attorney, 120), hours: num(l.hours), rate: num(l.rate) }
+    ? { desc: str(l.desc, 1000), task: str(l.task, 300) || undefined, attorney: str(l.attorney, 120), hours: num(l.hours) }
     : { desc: str(l.desc, 1000), amount: num(l.amount) }))
-    .filter(l => l.desc.trim() && (kind === 'time' ? l.hours! > 0 && l.rate! > 0 : l.amount! > 0));
-  if (!lines.length) return fail(kind === 'time' ? 'Enter hourly rates before sending the invoice.' : 'Add at least one line with an amount.', 400);
+    .filter(l => l.desc.trim() && (kind === 'time' ? l.hours! > 0 : l.amount! > 0));
+  if (!lines.length) return fail(kind === 'time' ? 'There are no time entries on this invoice.' : 'Add at least one line with an amount.', 400);
+
+  let terms: InvoiceTerms | undefined;
+  let invCurrency = currency;
+  if (kind === 'time') {
+    const name = str(d.client, 200).trim().toLowerCase();
+    const { data: cs } = await sb.from('clients').select('id, name');
+    const client = cs?.find(c => String(c.name || '').trim().toLowerCase() === name);
+    const { data: cb } = client ? await sb.from('client_billing').select('*').eq('client_id', client.id).maybeSingle() : { data: null };
+    if (!cb) return fail('Set the client\'s billing terms on the Clients page before sending the invoice.', 400);
+    terms = { hourlyRate: num(cb.hourly_rate), regularHours: num(cb.regular_hours), monthlyFee: num(cb.monthly_fee) };
+    invCurrency = (['USD', 'EUR', 'AMD'] as const).includes(cb.currency) ? cb.currency : currency;
+  }
 
   const { data: fs } = await sb.from('firm_settings').select('data').eq('id', 'firm').maybeSingle();
   const firm = normalizeFirm(fs?.data);
   const bank = firm.banks.find(x => x.id === b.bankId);
 
   const doc: InvoiceDoc = {
-    kind, currency, lines,
+    kind, currency: invCurrency, lines, terms,
     invNum: str(d.invNum, 60),
     issueDate: DATE_RE.test(String(d.issueDate)) ? String(d.issueDate) : new Date().toISOString().slice(0, 10),
     period: d.period ? str(d.period, 60) : undefined,
@@ -78,6 +91,8 @@ export async function POST(req: Request) {
     bankDetails: bank?.details,
     note: d.note ? str(d.note, 3000) : undefined,
   };
+
+  if (invoiceTotals(doc, firm.vatRate).total <= 0) return fail('Nothing to charge for these entries.', 400);
 
   const error = await sendInvoiceEmail({ to, doc, firm, appUrl: APP_URL, replyTo: replyFor(firm) });
   if (error) return fail(error, 502);

@@ -3,14 +3,14 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { CHAT_ROOMS, DEFAULT_FIRM } from '@/lib/constants';
 import {
-  addComment, addTaskFile, deleteComment, deleteMessage, deleteTaskFile, loadAll, loadTaskFiles, removeAttachment, rowToTaskFile, uploadAttachment, loadChatUnread, loadRows, loadComments, loadFirmSettings, loadLastLogins, loadMessages, loadNotifications, markChatRead, markNotificationsSeen, saveFirmSettings, touchLastSeen,
+  addComment, addTaskFile, deleteComment, deleteMessage, deleteTaskFile, loadAll, loadTaskFiles, removeAttachment, rowToTaskFile, uploadAttachment, loadChatUnread, loadRows, loadClientBilling, loadComments, loadFirmSettings, loadLastLogins, loadMessages, loadNotifications, markChatRead, markNotificationsSeen, saveClientBilling as writeClientBilling, saveFirmSettings, touchLastSeen,
   rowToActivity, rowToClient, rowToComment, rowToMember, rowToMessage, rowToNotification, rowToProject, write, type Mutation,
 } from '@/lib/db';
 import { sendMatterAssignmentEmail } from '@/lib/email';
 import { checkFile, canDeleteMatter, canEditTitle, canMakePrivate, canSeeMatter, dmRoom, isAdministrationTask, stat, today } from '@/lib/helpers';
 import { getSupabase } from '@/lib/supabase';
 import type {
-  Activity, ChatMessage, Client, Currency, FirmSettings, Member, Project, StatusId, SyncState, TaskComment, TaskFile, TaskNotification, TimeLog,
+  Activity, ChatMessage, Client, ClientBilling, Currency, FirmSettings, Member, Project, StatusId, SyncState, TaskComment, TaskFile, TaskNotification, TimeLog,
 } from '@/lib/types';
 import { ArchiveIcon, AtSignIcon, MessageSquareIcon, NotebookPenIcon, PaperclipIcon, GlobeIcon, LockIcon, MailIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -125,6 +125,8 @@ function useStoreValue() {
   const [taskFiles, setTaskFiles] = useState<Record<string, TaskFile[]>>({});
   // Member id → last sign-in time (admins only, migration 011). null until loaded.
   const [lastLogins, setLastLogins] = useState<Record<string, string> | null>(null);
+  // Client id → billing terms (admins only, migration 024). Never cached in the browser.
+  const [clientBilling, setClientBilling] = useState<Record<string, ClientBilling>>({});
   // Comments, files and notes changes on my tasks by others (migration 020), newest first. null until loaded.
   const [notifications, setNotifications] = useState<TaskNotification[] | null>(null);
   // Why notifications couldn't be loaded (shown on the Notifications page with a Retry button), or null.
@@ -141,10 +143,10 @@ function useStoreValue() {
   const hydrated = authStatus !== 'loading';
 
   // Refs so async callbacks (realtime, debounces) always see fresh state.
-  const state = useRef({ projects, clients, currentUser, team });
+  const state = useRef({ projects, clients, currentUser, team, clientBilling });
   const sessionRef = useRef(sessionEmail);
   sessionRef.current = sessionEmail;
-  state.current = { projects, clients, currentUser, team };
+  state.current = { projects, clients, currentUser, team, clientBilling };
   // The chat room currently on screen, if any — its messages are read as they arrive.
   const activeChatRoom = useRef<string | null>(null);
 
@@ -241,6 +243,7 @@ function useStoreValue() {
       loadFirmSettings().then(setFirm).catch(e => console.warn('Firm settings unavailable (has migration 006 been run?)', e));
       const user = data.team.find(m => m.email === sessionRef.current);
       if (user?.isAdmin) loadLastLogins().then(setLastLogins).catch(e => console.warn('Last logins unavailable (has migration 011 been run?)', e));
+      if (user?.isAdmin) loadClientBilling().then(setClientBilling).catch(e => console.warn('Client billing unavailable (has migration 024 been run?)', e));
     } catch (e) {
       console.warn('DB load error — using local cache', e);
       setSync('error');
@@ -273,7 +276,7 @@ function useStoreValue() {
   // While signed in: cached data → live data → realtime. On sign-out: clear everything.
   useEffect(() => {
     if (!sessionEmail) {
-      setTeam([]); setProjects([]); setClients([]); setActivity([]); setChatMessages({}); setChatUnreadByRoom({}); setComments({}); setTaskFiles({}); setLastLogins(null);
+      setTeam([]); setProjects([]); setClients([]); setActivity([]); setChatMessages({}); setChatUnreadByRoom({}); setComments({}); setTaskFiles({}); setLastLogins(null); setClientBilling({});
       setTeamLoaded(false); setSelectedPid(null); setModal(null);
       return;
     }
@@ -800,7 +803,21 @@ function useStoreValue() {
   /* ── Clients ── */
   const saveClient = (c: Client) => {
     setClients(cs => (cs.some(x => x.id === c.id) ? cs.map(x => (x.id === c.id ? c : x)) : [...cs, c]));
-    persist({ type: 'client', entity: c });
+    return persist({ type: 'client', entity: c });
+  };
+  /** Admins: set a client's hourly rate, regular hours and monthly fee. The client row must already be saved. */
+  const saveClientBilling = async (b: ClientBilling) => {
+    const prev = state.current.clientBilling[b.clientId];
+    setClientBilling(m => ({ ...m, [b.clientId]: b }));
+    try {
+      await writeClientBilling(b);
+      return true;
+    } catch (e) {
+      console.warn('Client billing save error', e);
+      setClientBilling(m => { const next = { ...m }; if (prev) next[b.clientId] = prev; else delete next[b.clientId]; return next; });
+      toast(TriangleAlertIcon, 'Billing terms not saved', 'Has migration 024 been run? Only admins can set billing terms.');
+      return false;
+    }
   };
   const deleteClient = (id: string, onDeleted?: () => void) => {
     const c = state.current.clients.find(x => x.id === id);
@@ -947,7 +964,7 @@ function useStoreValue() {
     toast, login, logout, sendPasswordEmail, emp, openPanel, closePanel: () => setSelectedPid(null),
     closeModal: () => setModal(null),
     addActivity, saveProject, patchProject, setStatus, sendToReview, setSupervisor, setProgress, togglePrivacy, addTimeLog, updateTimeLog, removeTimeLog, setAssignees, renameProject, setLogInInvoice, createProject, archiveProject, deleteProject,
-    saveClient, deleteClient, saveMember, deleteMember,
+    saveClient, deleteClient, clientBilling, saveClientBilling, saveMember, deleteMember,
     loadRoom, sendMessage, setActiveChatRoom, clearSavedState,
     comments, loadTaskComments, postComment, removeComment, lastLogins, refreshLastLogins,
     notifications, notificationsError, retryNotifications: () => loadNotificationsRef.current(), unseenNotifications, markSeen,

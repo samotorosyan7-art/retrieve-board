@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { LOGO_SRC, PAYMENT_TERMS } from '@/lib/constants';
 import { sendInvoice } from '@/lib/email';
 import { today } from '@/lib/helpers';
-import { invoiceHtml, invoiceMoney, invoiceTotals, type InvoiceDoc, type InvoiceLine } from '@/lib/invoice';
+import { invoiceHtml, invoiceMoney, invoiceTotals, lineHours, type InvoiceDoc, type InvoiceLine, type InvoiceTerms } from '@/lib/invoice';
 import type { Currency } from '@/lib/types';
 import { useStore } from '../store';
 import { ArrowLeftIcon, CircleCheckIcon, FileTextIcon, MailIcon, PencilIcon, PlusIcon, PrinterIcon, Trash2Icon, TriangleAlertIcon, XIcon } from 'lucide-react';
@@ -14,6 +14,9 @@ type Props = {
   kind: 'time' | 'amount';
   client?: string;
   timeLines?: InvoiceLine[];
+  /** Time invoices: the client's billing terms, and the currency they're in. */
+  terms?: InvoiceTerms;
+  currency?: Currency;
   period?: string;
   invNum: string;
   includeVat: boolean;
@@ -24,7 +27,7 @@ type Props = {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Invoice options → Export PDF, or Send: recipient (saved client email or typed) → confirm. */
-export function InvoiceModal({ kind, client: initialClient = '', timeLines = [], period, invNum: initialNum, includeVat, setIncludeVat, onClose }: Props) {
+export function InvoiceModal({ kind, client: initialClient = '', timeLines = [], terms, currency: fixedCurrency, period, invNum: initialNum, includeVat, setIncludeVat, onClose }: Props) {
   const { firm, clients, billingCurrency, setBillingCurrency, toast } = useStore();
   const [step, setStep] = useState<'form' | 'recipient' | 'confirm'>('form');
   const [client, setClient] = useState(initialClient);
@@ -43,6 +46,7 @@ export function InvoiceModal({ kind, client: initialClient = '', timeLines = [],
   const record = clients.find(c => c.name.trim().toLowerCase() === client.trim().toLowerCase());
   const savedEmail = record?.email || '';
   const bank = firm.banks.find(b => b.id === bankId);
+  const currency = fixedCurrency ?? billingCurrency;
   const lines: InvoiceLine[] = kind === 'time'
     ? timeLines
     : amountLines.filter(l => l.desc.trim() || l.amount).map(l => ({ desc: l.desc.trim(), amount: parseFloat(l.amount) || 0 }));
@@ -50,17 +54,18 @@ export function InvoiceModal({ kind, client: initialClient = '', timeLines = [],
   const doc: InvoiceDoc = {
     kind, invNum: invNum.trim(), issueDate, period, client: client.trim(),
     clientDetails: record ? [record.address, record.taxId && `TIN: ${record.taxId}`].filter(Boolean).join('\n') || undefined : undefined,
-    currency: billingCurrency, lines, includeVat, showAttorneys: kind === 'time' && showAttorneys,
+    currency, lines, terms: kind === 'time' ? terms : undefined, includeVat, showAttorneys: kind === 'time' && showAttorneys,
     paymentTerms, bankDetails: bank?.details, note: note.trim() || undefined,
   };
   const { total } = invoiceTotals(doc, firm.vatRate);
-  const totalLabel = `${invoiceMoney(total, billingCurrency)} ${includeVat ? `incl. ${firm.vatRate}% VAT` : 'excl. VAT'}`;
+  const totalLabel = `${invoiceMoney(total, currency)} ${includeVat ? `incl. ${firm.vatRate}% VAT` : 'excl. VAT'}`;
 
   function problem() {
     if (!doc.client) return 'Enter the client.';
     if (!doc.invNum) return 'Enter an invoice number.';
     if (kind === 'amount' && lines.some(l => !l.desc || !(l.amount! > 0))) return 'Each line needs a description and an amount.';
-    if (!lines.length || total <= 0) return kind === 'time' ? 'Enter hourly rates for the entries first.' : 'Add at least one line with an amount.';
+    if (kind === 'time' && !terms) return 'Set the client\'s billing terms first.';
+    if (!lines.length || total <= 0) return kind === 'time' ? 'Nothing to charge for these entries.' : 'Add at least one line with an amount.';
     return '';
   }
 
@@ -133,7 +138,7 @@ export function InvoiceModal({ kind, client: initialClient = '', timeLines = [],
                         onChange={e => { setAmountLines(ls => ls.map((x, j) => (j === i ? { ...x, desc: e.target.value } : x))); setError(''); }}
                       />
                       <input
-                        className="input" type="number" min={0} step={billingCurrency === 'AMD' ? 1000 : 10} placeholder={`Amount (${billingCurrency})`}
+                        className="input" type="number" min={0} step={currency === 'AMD' ? 1000 : 10} placeholder={`Amount (${currency})`}
                         style={{ width: 140, fontFamily: 'var(--font-mono)' }} value={l.amount}
                         onChange={e => { setAmountLines(ls => ls.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x))); setError(''); }}
                       />
@@ -150,7 +155,7 @@ export function InvoiceModal({ kind, client: initialClient = '', timeLines = [],
             </>}
             {kind === 'time' && (
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', background: 'var(--bg-overlay)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-lg)', padding: '10px 12px' }}>
-                <b style={{ color: 'var(--text-primary)' }}>{doc.client}</b> · {period} · {lines.length} time entr{lines.length === 1 ? 'y' : 'ies'} with a rate
+                <b style={{ color: 'var(--text-primary)' }}>{doc.client}</b> · {period} · {lines.length} time entr{lines.length === 1 ? 'y' : 'ies'} · {lineHours(lines)}h
               </div>
             )}
             <div className="inv-modal-grid">
@@ -158,11 +163,15 @@ export function InvoiceModal({ kind, client: initialClient = '', timeLines = [],
               <div><label className="form-label">Issue date</label><input className="input" type="date" value={issueDate} onChange={e => setIssueDate(e.target.value || today())} /></div>
               <div>
                 <label className="form-label">Currency</label>
-                <div className="seg-ctrl" title={kind === 'time' ? 'Rates you typed are in this currency — changing it relabels them, it doesn\'t convert.' : undefined}>
-                  {(['AMD', 'USD', 'EUR'] as Currency[]).map(c => (
-                    <button key={c} className={`seg-btn${billingCurrency === c ? ' active' : ''}`} onClick={() => setBillingCurrency(c)}>{c}</button>
-                  ))}
-                </div>
+                {fixedCurrency ? (
+                  <div className="input" style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }} title="Set with the client's billing terms">{fixedCurrency}</div>
+                ) : (
+                  <div className="seg-ctrl">
+                    {(['AMD', 'USD', 'EUR'] as Currency[]).map(c => (
+                      <button key={c} className={`seg-btn${billingCurrency === c ? ' active' : ''}`} onClick={() => setBillingCurrency(c)}>{c}</button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="form-label">Bank account</label>

@@ -96,6 +96,16 @@ export interface Client {
   since: string;
 }
 
+/** A client's billing terms (migration 024, admins only). The month is billed as
+ *  monthlyFee + (hours above regularHours) × hourlyRate, in `currency`. */
+export interface ClientBilling {
+  clientId: string;
+  currency: Currency;
+  hourlyRate: number;
+  regularHours: number;
+  monthlyFee: number;
+}
+
 export interface Activity {
   who: string;
   /** May contain <b> tags — always render through sanitizeActivity(). */

@@ -1,7 +1,7 @@
 import { DEFAULT_FIRM, FILE_TYPES } from './constants';
 import { fileExt, normalizeFirm } from './helpers';
 import { getSupabase } from './supabase';
-import type { Activity, Attachment, ChatMessage, Client, FirmSettings, Member, Project, SentInvoice, StatusChange, TaskComment, TaskFile, TaskNotification } from './types';
+import type { Activity, Attachment, ChatMessage, Client, ClientBilling, FirmSettings, Member, Project, SentInvoice, StatusChange, TaskComment, TaskFile, TaskNotification } from './types';
 
 /* ── Row converters (DB snake_case ↔ app camelCase) ── */
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -324,6 +324,26 @@ export async function saveFirmSettings(firm: FirmSettings) {
   if (error) throw error;
   // Row-level security (non-admins) blocks the write silently.
   if (!data?.length) throw new Error('Firm settings were not saved');
+}
+
+/** Every client's billing terms (migration 024, admins only), by client id. */
+export async function loadClientBilling(): Promise<Record<string, ClientBilling>> {
+  const { data, error } = await getSupabase()!.from('client_billing').select('*');
+  if (error) throw error;
+  return Object.fromEntries((data || []).map(r => [r.client_id, {
+    clientId: r.client_id, currency: r.currency, hourlyRate: Number(r.hourly_rate) || 0,
+    regularHours: Number(r.regular_hours) || 0, monthlyFee: Number(r.monthly_fee) || 0,
+  }]));
+}
+
+export async function saveClientBilling(b: ClientBilling) {
+  const { data, error } = await getSupabase()!.from('client_billing').upsert({
+    client_id: b.clientId, currency: b.currency, hourly_rate: b.hourlyRate,
+    regular_hours: b.regularHours, monthly_fee: b.monthlyFee, updated_at: new Date().toISOString(),
+  }).select('client_id');
+  if (error) throw error;
+  // Row-level security (non-admins) blocks the write silently.
+  if (!data?.length) throw new Error('Billing terms were not saved');
 }
 
 /* ── Writes ── */
