@@ -4,14 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import { LOGO_SRC, STATUSES } from '@/lib/constants';
 import { canSeeMatter } from '@/lib/helpers';
 import { EXPORTED_STATUSES, pdfFonts, tasksFileName, tasksPdf } from '@/lib/task-export';
+import type { ExportGroupBy } from '@/lib/task-export';
 import { byDate } from './MatterFilters';
 import { useStore } from './store';
 import { Av } from './ui';
 import { FileTextIcon, InfoIcon, LoaderCircleIcon, TriangleAlertIcon } from 'lucide-react';
 
 /** List / Kanban header: download a member's open tasks (Intake → Supervisor Review) as a PDF.
- *  Members export their own straight away; admins click, then pick the member from a list. */
-export function ExportTasksButton() {
+ *  Members export their own straight away; admins click, then pick the member from a list.
+ *  `groupBy` splits the PDF into sections by status (default) or by client. */
+export function ExportTasksButton({ groupBy = 'status' }: { groupBy?: ExportGroupBy }) {
   const { projects, team, currentUser, emp, firm, toast } = useStore();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -50,7 +52,7 @@ export function ExportTasksButton() {
     try {
       const pdfMake = (await import('pdfmake/build/pdfmake')).default;
       pdfMake.setFonts(pdfFonts(location.origin));
-      await pdfMake.createPdf(tasksPdf(member, tasks, team, firm, location.origin + LOGO_SRC)).download(tasksFileName(member));
+      await pdfMake.createPdf(tasksPdf(member, tasks, team, firm, location.origin + LOGO_SRC, groupBy)).download(tasksFileName(member));
     } catch (e) {
       console.warn('PDF export failed', e);
       toast(TriangleAlertIcon, 'Export failed', 'The PDF could not be created. Please try again.');

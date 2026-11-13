@@ -24,8 +24,11 @@ export function tasksFileName(member: Member) {
   return `tasks-${member.name.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.pdf`;
 }
 
+/** How the PDF's sections are split: by status (List) or by client (Kanban, with each task's status shown in its row). */
+export type ExportGroupBy = 'status' | 'client';
+
 /** `tasks` are already filtered to EXPORTED_STATUSES and sorted. `logoUrl` must be absolute (pdfmake fetches images listed in `images`). */
-export function tasksPdf(member: Member, tasks: Project[], team: Member[], firm: FirmSettings, logoUrl: string): TDocumentDefinitions {
+export function tasksPdf(member: Member, tasks: Project[], team: Member[], firm: FirmSettings, logoUrl: string, groupBy: ExportGroupBy = 'status'): TDocumentDefinitions {
   const name = (id: string) => team.find(m => m.id === id)?.name ?? '';
   const asOf = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const th = (label: string, right = false): TableCell =>
@@ -39,9 +42,12 @@ export function tasksPdf(member: Member, tasks: Project[], team: Member[], firm:
       ...(p.supervisor ? [{ text: [{ text: 'Supervisor ', color: C.faint }, ...t(name(p.supervisor))] }] : []),
     ];
     const od = isOD(p);
+    const st = STATUSES.find(x => x.id === p.status);
     return [
       { stack: [{ text: t(p.title), bold: true }, ...(p.notes.trim() ? [{ text: t(p.notes.trim()), style: 'notes' }] : [])] },
-      { text: t(p.client) },
+      groupBy === 'client'
+        ? (st ? { text: st.label, bold: true, color: st.col } : '')
+        : { text: t(p.client) },
       { text: t([p.matterType, p.area].filter(Boolean).join(' · ')) },
       pr ? { text: pr.label, bold: true, color: pr.col } : '',
       { text: `${p.progress}%`, alignment: 'right' },
@@ -53,14 +59,21 @@ export function tasksPdf(member: Member, tasks: Project[], team: Member[], firm:
     ];
   };
 
-  const sections: Content[] = STATUSES.filter(s => EXPORTED_STATUSES.includes(s.id)).flatMap(s => {
-    const list = tasks.filter(p => p.status === s.id);
+  // Sections in order: statuses in board order, or clients A→Z (tasks keep their status/due order within each client).
+  const groups: { label: string; col: string; list: Project[] }[] = groupBy === 'client'
+    ? [...new Set(tasks.map(p => p.client))]
+        .sort((a, b) => (a || '\uffff').localeCompare(b || '\uffff'))
+        .map(c => ({ label: c || 'No client', col: C.muted, list: tasks.filter(p => p.client === c) }))
+    : STATUSES.filter(s => EXPORTED_STATUSES.includes(s.id))
+        .map(s => ({ label: s.label, col: s.col, list: tasks.filter(p => p.status === s.id) }));
+
+  const sections: Content[] = groups.flatMap(({ label, col, list }) => {
     if (!list.length) return [];
     return [
       {
         columns: [
-          { canvas: [{ type: 'ellipse', x: 4, y: 7, r1: 3.5, r2: 3.5, color: s.col }], width: 12 },
-          { text: [{ text: s.label, bold: true, fontSize: 11 }, { text: `   ${list.length}`, color: C.faint, fontSize: 9 }], width: '*' },
+          { canvas: [{ type: 'ellipse', x: 4, y: 7, r1: 3.5, r2: 3.5, color: col }], width: 12 },
+          { text: [{ text: t(label), bold: true, fontSize: 11 }, { text: `   ${list.length}`, color: C.faint, fontSize: 9 }], width: '*' },
         ],
         margin: [0, 16, 0, 6],
       },
@@ -70,7 +83,7 @@ export function tasksPdf(member: Member, tasks: Project[], team: Member[], firm:
           dontBreakRows: true,
           widths: ['29%', '13%', '15%', '7%', '8%', '14%', '14%'],
           body: [
-            [th('Task'), th('Client'), th('Type · Area'), th('Priority'), th('Progress', true), th('Team'), th('Due')],
+            [th('Task'), th(groupBy === 'client' ? 'Status' : 'Client'), th('Type · Area'), th('Priority'), th('Progress', true), th('Team'), th('Due')],
             ...list.map(row),
           ],
         },

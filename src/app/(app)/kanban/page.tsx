@@ -124,7 +124,7 @@ export default function KanbanPage() {
   return (
     <div className="page active" id="page-kanban">
       <PageHeader title="Kanban" light="Board" sub={`${f.length} task${f.length !== 1 ? 's' : ''} shown · drag a card to another column to move it`}>
-        <ExportTasksButton />
+        <ExportTasksButton groupBy="client" />
         <div className="seg-ctrl">
           <button className="seg-btn" onClick={() => go('list')}>List</button>
           <button className="seg-btn active">Kanban</button>

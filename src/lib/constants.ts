@@ -8,8 +8,8 @@ export const STATUSES: { id: StatusId; label: string; col: string; bg: string }[
   {id:"inprogress",label:"In Progress",             col:"#E8A838",bg:"rgba(232,168,56,0.12)"},
   {id:"backlog",   label:"Client Input / Backlog",  col:"#64748B",bg:"rgba(100,116,139,0.12)"},
   {id:"review",    label:"Supervisor Review",       col:"#A78BFA",bg:"rgba(167,139,250,0.12)"},
+  {id:"billing",   label:"Ongoing",                 col:"#38BDF8",bg:"rgba(56,189,248,0.12)"},
   {id:"done",      label:"Completed",               col:"#34D399",bg:"rgba(52,211,153,0.12)"},
-  {id:"billing",   label:"Billing",                 col:"#38BDF8",bg:"rgba(56,189,248,0.12)"},
   {id:"archive",   label:"Archive",                 col:"#94A3B8",bg:"rgba(148,163,184,0.12)"},
 ];
 
