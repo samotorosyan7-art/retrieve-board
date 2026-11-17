@@ -12,11 +12,14 @@ export default function DashboardPage() {
   const { projects, team, activity, currentUser, emp, openPanel, lastLogins, refreshLastLogins } = useStore();
   const { go } = useNav();
 
-  // "Last seen" changes while this page is open — re-read it every minute.
+  // "Last seen" changes while this page is open. Members only report it about once an hour, so re-reading it
+  // every 5 minutes (and when the tab comes back) is plenty; a hidden tab doesn't query at all.
   useEffect(() => {
-    refreshLastLogins();
-    const t = setInterval(refreshLastLogins, 60_000);
-    return () => clearInterval(t);
+    const refresh = () => { if (!document.hidden) refreshLastLogins(); };
+    refresh();
+    const t = setInterval(refresh, 5 * 60_000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', refresh); };
   }, [refreshLastLogins]);
 
   // Each KPI opens All Tasks with the same filter, so the list matches the number.

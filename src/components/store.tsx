@@ -397,9 +397,15 @@ function useStoreValue() {
         if (msg.deleted && msg.who !== currentUserId) refreshChatUnread();
       }
     }, refreshChatUnread); // on every (re)connect, re-read the counts so nothing missed while offline is lost
-    // Counts don't depend on realtime connecting; also re-read them whenever the tab comes back.
+    // Counts don't depend on realtime connecting; also re-read them when the tab comes back — at most once a minute,
+    // since live updates keep them current in between and switching tabs often would otherwise recount every time.
     refreshChatUnread();
-    const onVisible = () => { if (!document.hidden) refreshChatUnread(); };
+    let lastVisibleRefresh = Date.now();
+    const onVisible = () => {
+      if (document.hidden || Date.now() - lastVisibleRefresh < 60_000) return;
+      lastVisibleRefresh = Date.now();
+      refreshChatUnread();
+    };
     document.addEventListener('visibilitychange', onVisible);
     return () => { unsubscribe(); document.removeEventListener('visibilitychange', onVisible); };
   }, [currentUserId, refreshChatUnread]);
